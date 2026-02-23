@@ -4,12 +4,63 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-agentic_toy - A new project (currently empty).
+Board Game Cafe Assistant - An AI-powered assistant that answers natural language questions about a board game cafe's data using Claude 3 Haiku via AWS Bedrock.
 
 ## Build & Development Commands
 
-*To be documented once the project structure is established.*
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run interactive TUI
+python main.py
+
+# Run with a single question
+python main.py "What are our top selling games?"
+
+# Initialize/reset the database
+python database.py
+
+# Test the calculator
+python calculator.py
+
+# Test the agent directly
+python agent.py
+```
+
+**Prerequisites:** Python 3.10+, AWS credentials configured with Bedrock access.
 
 ## Architecture
 
-*To be documented as the codebase develops.*
+### Agentic Loop Pattern
+
+The core architecture is an agentic loop in `agent.py` where Claude autonomously decides which tool to use:
+
+1. User asks a question
+2. Claude receives the question + system prompt with tool definitions
+3. Claude responds with exactly one JSON action: `query`, `calculate`, or `answer`
+4. If not `answer`, the tool executes and result is fed back to Claude
+5. Loop repeats until Claude provides a final `answer` (max 10 turns)
+
+### Tool System
+
+Two tools available to the agent:
+
+- **query** (`database.py`): Executes SQL SELECT queries against SQLite. Restricted to SELECT only for safety.
+- **calculate** (`calculator.py`): Evaluates math expressions. Uses AST parsing for security - only allows numbers and basic operators (+, -, *, /, parentheses).
+
+### Key Files
+
+- `main.py` - Interactive TUI using Rich, handles commands (`/help`, `/tables`, `/quit`)
+- `agent.py` - Core agent loop, Bedrock API calls, retry logic for invalid JSON
+- `schema.py` - JSON action validation, extracts first valid JSON object from response
+- `database.py` - SQLite setup, schema, seed data for cafe inventory/sales/rentals
+- `calculator.py` - Safe math evaluator using Python AST
+
+### Database Schema
+
+Six tables: `board_games`, `game_sales`, `table_rentals`, `food_bev_items`, `food_bev_orders`, `operating_expenses`. Run `/tables` in the TUI or see `database.py:get_schema()` for full schema.
+
+### Model Configuration
+
+Uses `anthropic.claude-3-haiku-20240307-v1:0` via AWS Bedrock. Model ID defined in `agent.py:MODEL_ID`.
