@@ -47,11 +47,12 @@ The core architecture is an agentic loop in `agent.py` where Claude autonomously
 
 ### Tool System
 
-Three tools available to the agent:
+Four tools available to the agent:
 
 - **query** (`database.py`): Executes SQL SELECT queries against SQLite. Restricted to SELECT only for safety.
 - **calculate** (`calculator.py`): Evaluates math expressions and statistics. Uses AST parsing for security. Supports +, -, *, /, parentheses, and statistical functions: mean(), median(), mode(), stdev(), range().
 - **search** (`search.py`): Semantic search over board games using ChromaDB. Finds similar matches without requiring exact text.
+- **whatif** (`whatif.py`): Scenario analysis for business planning. Supports price changes, volume changes, expense changes, and rental hour projections.
 
 ### Key Files
 
@@ -62,6 +63,7 @@ Three tools available to the agent:
 - `database.py` - SQLite setup, schema, seed data for cafe inventory/sales/rentals
 - `calculator.py` - Safe math evaluator using Python AST
 - `search.py` - Semantic search using ChromaDB with local embeddings
+- `whatif.py` - Scenario analysis engine for business projections
 
 ### Database Schema
 

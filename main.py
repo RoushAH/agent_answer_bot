@@ -114,6 +114,9 @@ class ProgressDisplay:
                 elif tool == "search":
                     line.append("Search: ", style="bold blue")
                     line.append(detail, style="cyan")
+                elif tool == "whatif":
+                    line.append("What-If: ", style="bold green")
+                    line.append(detail, style="cyan")
                 elements.append(line)
 
             elif event == "executing":

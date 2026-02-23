@@ -39,6 +39,7 @@ TOOLS:
 1. query - Execute SQL SELECT queries
 2. calculate - Evaluate math expressions and statistics (supports +, -, *, /, mean, median, mode, stdev, range)
 3. search - Semantic search for board games (finds similar matches, not exact)
+4. whatif - Scenario analysis ("what if prices increased 10%?", "what if we sold 20 more Catans?")
 
 RESPONSE FORMAT:
 You must respond with EXACTLY ONE JSON object per message. No other text, no explanations.
@@ -46,6 +47,7 @@ You must respond with EXACTLY ONE JSON object per message. No other text, no exp
 {{"action": "query", "sql": "SELECT ..."}}
 {{"action": "calculate", "expression": "123.45 + 67.89"}}
 {{"action": "search", "query": "cooperative family games", "n": 5}}
+{{"action": "whatif", "scenario_type": "price_change", "params": {{"target": "games", "change_percent": 10}}}}
 {{"action": "answer", "text": "Your final answer here"}}
 
 ANSWER FORMAT:
@@ -56,6 +58,13 @@ The "answer" text MUST be natural language for a human reader, NOT raw JSON or d
 WHEN TO USE SEARCH VS QUERY:
 - Use "search" when looking for games by description/vibe (e.g., "games about building", "fun party games")
 - Use "query" when you need exact data (e.g., prices, stock levels, sales figures)
+
+WHAT-IF SCENARIOS (use "whatif" action):
+- scenario_type: "price_change" - params: {{"target": "games"|"food"|"tables"|item_name, "change_percent": number}}
+- scenario_type: "volume_change" - params: {{"target": item_name, "quantity_change": number}}
+- scenario_type: "expense_change" - params: {{"category": "all"|"rent"|"labor"|etc, "change_percent": number}}
+- scenario_type: "hours_change" - params: {{"hours_change": number}}
+Example: "What if game prices increased 15%?" → {{"action": "whatif", "scenario_type": "price_change", "params": {{"target": "games", "change_percent": 15}}}}
 
 ONE action at a time. You will see the result, then can do the next action.
 
@@ -178,6 +187,16 @@ def execute_action(action: dict) -> tuple[str, bool]:
         except Exception as e:
             return f"Search error: {e}", True
 
+    elif action_type == "whatif":
+        try:
+            from whatif import run_scenario
+            result = run_scenario(action["scenario_type"], **action["params"])
+            if "error" in result:
+                return f"Scenario error: {result['error']}", True
+            return json.dumps(result, indent=2), False
+        except Exception as e:
+            return f"What-if error: {e}", True
+
     return "Unknown action type.", True
 
 
@@ -258,6 +277,8 @@ def run_agent(
             emit("tool_call", "calculate", action["expression"])
         elif action_type == "search":
             emit("tool_call", "search", action["query"])
+        elif action_type == "whatif":
+            emit("tool_call", "whatif", f"{action['scenario_type']}: {action['params']}")
 
         # Execute the action and get result
         result, is_error = execute_action(action)
@@ -281,6 +302,13 @@ def run_agent(
                 emit("result", "search", f"{len(data)} game(s) found")
             except (json.JSONDecodeError, TypeError):
                 emit("result", "search", result[:50])
+        elif action_type == "whatif":
+            try:
+                data = json.loads(result)
+                scenario = data.get("scenario", "Scenario calculated")
+                emit("result", "whatif", scenario[:60])
+            except (json.JSONDecodeError, TypeError):
+                emit("result", "whatif", result[:50])
         elif action_type == "calculate":
             emit("result", "calculate", result)
 
