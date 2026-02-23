@@ -54,18 +54,21 @@ The assistant uses an agentic loop where Claude:
 
 The sample database includes:
 
-- **board_games** - Inventory with prices, costs, categories, and stock levels
+- **board_games** - Inventory with retail prices, wholesale costs, categories, and stock levels
 - **game_sales** - Sales history with dates, quantities, and channels (online/in-store)
 - **table_rentals** - Table booking records with duration and hourly rates
+- **food_bev_items** - Menu items with sell prices and costs for profit calculations
 - **food_bev_orders** - Food and beverage orders linked to table rentals
+- **operating_expenses** - Monthly expenses (rent, utilities, labor, insurance, marketing)
 
 ## Example Questions
 
 - "How many board games do we have in stock?"
 - "What are our top 3 selling games?"
-- "What was total revenue from table rentals?"
-- "Which food items are most popular?"
-- "What's the average game price by category?"
+- "What was our profit margin on game sales?"
+- "What were our total operating expenses in January?"
+- "Which food items have the highest profit margin?"
+- "What's our net profit after all expenses?"
 
 ## Commands
 

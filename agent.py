@@ -47,13 +47,16 @@ CRITICAL RULES:
 DATA WE HAVE:
 - Board game inventory (names, prices, wholesale costs, stock levels)
 - Game sales (what we sold, when, at what price, online vs in-store)
-- Table rentals (what we CHARGE customers for table time - this is REVENUE, not cost)
-- Food & beverage orders (what customers ordered during rentals - this is REVENUE)
+- Table rentals (what we CHARGE customers for table time - this is REVENUE)
+- Food & beverage items (menu items with sell prices AND costs)
+- Food & beverage orders (what customers ordered during rentals)
+- Operating expenses (rent, utilities, labor, insurance, marketing, supplies by month)
 
-DATA WE DON'T HAVE:
-- Labour/employee costs, wages, staffing
-- Rent, utilities, operating expenses
-- Food & beverage ingredient costs
+PROFIT CALCULATIONS:
+- Game profit = (unit_price - board_games.cost) * quantity
+- Food/bev profit = (unit_price - food_bev_items.cost) * quantity (join on item_name)
+- Table rental revenue is pure profit (no direct costs)
+- Net profit = total revenue - total costs - operating expenses
 
 Today's date is 2026-02-20
 

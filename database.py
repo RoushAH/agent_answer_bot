@@ -24,6 +24,8 @@ def init_db() -> None:
         DROP TABLE IF EXISTS table_rentals;
         DROP TABLE IF EXISTS game_sales;
         DROP TABLE IF EXISTS board_games;
+        DROP TABLE IF EXISTS food_bev_items;
+        DROP TABLE IF EXISTS operating_expenses;
 
         CREATE TABLE board_games (
             id INTEGER PRIMARY KEY,
@@ -53,6 +55,14 @@ def init_db() -> None:
             hourly_rate REAL NOT NULL
         );
 
+        CREATE TABLE food_bev_items (
+            id INTEGER PRIMARY KEY,
+            item_name TEXT NOT NULL UNIQUE,
+            sell_price REAL NOT NULL,
+            cost REAL NOT NULL,
+            category TEXT NOT NULL
+        );
+
         CREATE TABLE food_bev_orders (
             id INTEGER PRIMARY KEY,
             rental_id INTEGER NOT NULL,
@@ -60,6 +70,14 @@ def init_db() -> None:
             quantity INTEGER NOT NULL,
             unit_price REAL NOT NULL,
             FOREIGN KEY (rental_id) REFERENCES table_rentals(id)
+        );
+
+        CREATE TABLE operating_expenses (
+            id INTEGER PRIMARY KEY,
+            month TEXT NOT NULL,
+            category TEXT NOT NULL,
+            amount REAL NOT NULL,
+            description TEXT
         );
     """)
 
@@ -133,6 +151,25 @@ def init_db() -> None:
         rentals
     )
 
+    # Seed food_bev_items (with costs - ~35% food cost ratio)
+    food_items = [
+        ("Coffee", 4.50, 0.85, "Beverage"),
+        ("Tea", 3.50, 0.50, "Beverage"),
+        ("Latte", 5.50, 1.25, "Beverage"),
+        ("Hot Chocolate", 4.00, 1.00, "Beverage"),
+        ("Soda", 2.50, 0.75, "Beverage"),
+        ("Craft Beer", 7.00, 2.80, "Alcohol"),
+        ("Wine", 8.00, 3.20, "Alcohol"),
+        ("Brownie", 3.50, 1.05, "Food"),
+        ("Cookie", 2.50, 0.65, "Food"),
+        ("Nachos", 9.00, 3.15, "Food"),
+        ("Pizza Slice", 5.00, 1.75, "Food"),
+    ]
+    cur.executemany(
+        "INSERT INTO food_bev_items (item_name, sell_price, cost, category) VALUES (?, ?, ?, ?)",
+        food_items
+    )
+
     # Seed food_bev_orders
     orders = [
         (1, "Coffee", 2, 4.50),
@@ -159,6 +196,25 @@ def init_db() -> None:
     cur.executemany(
         "INSERT INTO food_bev_orders (rental_id, item_name, quantity, unit_price) VALUES (?, ?, ?, ?)",
         orders
+    )
+
+    # Seed operating_expenses (monthly costs)
+    expenses = [
+        ("2026-01", "Rent", 2500.00, "Monthly lease payment"),
+        ("2026-01", "Utilities", 350.00, "Electric, water, internet"),
+        ("2026-01", "Labor", 4200.00, "Staff wages"),
+        ("2026-01", "Insurance", 200.00, "Business liability"),
+        ("2026-01", "Marketing", 150.00, "Social media ads"),
+        ("2026-02", "Rent", 2500.00, "Monthly lease payment"),
+        ("2026-02", "Utilities", 380.00, "Electric, water, internet"),
+        ("2026-02", "Labor", 4500.00, "Staff wages"),
+        ("2026-02", "Insurance", 200.00, "Business liability"),
+        ("2026-02", "Marketing", 200.00, "Valentine's promo"),
+        ("2026-02", "Supplies", 125.00, "Cleaning supplies, napkins"),
+    ]
+    cur.executemany(
+        "INSERT INTO operating_expenses (month, category, amount, description) VALUES (?, ?, ?, ?)",
+        expenses
     )
 
     conn.commit()
@@ -206,12 +262,26 @@ Database Tables:
    - duration_hours: REAL
    - hourly_rate: REAL
 
-4. food_bev_orders
+4. food_bev_items
+   - id: INTEGER PRIMARY KEY
+   - item_name: TEXT (unique name)
+   - sell_price: REAL (what we charge customers)
+   - cost: REAL (our cost to make/buy)
+   - category: TEXT (Beverage, Alcohol, Food)
+
+5. food_bev_orders
    - id: INTEGER PRIMARY KEY
    - rental_id: INTEGER (FK to table_rentals.id)
-   - item_name: TEXT
+   - item_name: TEXT (FK to food_bev_items.item_name)
    - quantity: INTEGER
    - unit_price: REAL
+
+6. operating_expenses
+   - id: INTEGER PRIMARY KEY
+   - month: TEXT (YYYY-MM format)
+   - category: TEXT (Rent, Utilities, Labor, Insurance, Marketing, Supplies)
+   - amount: REAL
+   - description: TEXT
 """.strip()
 
 

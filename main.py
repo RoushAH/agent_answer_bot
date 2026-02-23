@@ -51,10 +51,10 @@ Or just ask a question in plain English!
 SAMPLE_QUESTIONS = [
     "How many board games do we have in stock?",
     "What are our top 3 selling games?",
-    "What was total revenue from table rentals?",
-    "Which food items are most popular?",
-    "What's the average game price by category?",
-    "How many games did we sell online vs in-store?",
+    "What was our profit margin on game sales?",
+    "What were our total operating expenses in January?",
+    "Which food items have the highest profit margin?",
+    "What's our net profit after all expenses?",
 ]
 
 # Status markers (ASCII-safe for Windows compatibility)
@@ -194,6 +194,15 @@ def show_tables():
 | duration_hours | REAL | Length of rental |
 | hourly_rate | REAL | Rate per hour |
 
+### food_bev_items
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER | Primary key |
+| item_name | TEXT | Menu item name |
+| sell_price | REAL | Customer price |
+| cost | REAL | Our cost |
+| category | TEXT | Beverage/Alcohol/Food |
+
 ### food_bev_orders
 | Column | Type | Description |
 |--------|------|-------------|
@@ -202,6 +211,15 @@ def show_tables():
 | item_name | TEXT | Food/drink item |
 | quantity | INTEGER | Units ordered |
 | unit_price | REAL | Price per unit |
+
+### operating_expenses
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER | Primary key |
+| month | TEXT | YYYY-MM format |
+| category | TEXT | Expense type |
+| amount | REAL | Cost amount |
+| description | TEXT | Details |
 """
     console.print(Markdown(schema))
 
