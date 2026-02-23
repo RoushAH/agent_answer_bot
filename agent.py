@@ -1,6 +1,7 @@
 """Core agent loop with configurable LLM backend."""
 
 import json
+from datetime import date
 from typing import Callable, Optional
 
 from database import query_db, get_schema
@@ -95,7 +96,15 @@ PROFIT CALCULATIONS:
 - Table rental revenue is pure profit (no direct costs)
 - Net profit = total revenue - total costs - operating expenses
 
-Today's date is 2026-02-20
+INTERPRETING COMMON TERMS (use averages, not specific dates):
+- "daily" = average per day (total / number of distinct days), NOT "today"
+- "weekly" = average per week or total for a week period
+- "monthly" = average per month or total for a specific month
+- "typical" or "usual" = use mean or median of historical data
+- "how much do we make" = use historical averages, not a single day
+When asked about rates (daily/weekly/monthly), calculate from ALL available data unless a specific date range is mentioned.
+
+Today's date is {date.today().isoformat()}
 
 {schema}"""
 
