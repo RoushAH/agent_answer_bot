@@ -50,7 +50,7 @@ The core architecture is an agentic loop in `agent.py` where Claude autonomously
 Three tools available to the agent:
 
 - **query** (`database.py`): Executes SQL SELECT queries against SQLite. Restricted to SELECT only for safety.
-- **calculate** (`calculator.py`): Evaluates math expressions. Uses AST parsing for security - only allows numbers and basic operators (+, -, *, /, parentheses).
+- **calculate** (`calculator.py`): Evaluates math expressions and statistics. Uses AST parsing for security. Supports +, -, *, /, parentheses, and statistical functions: mean(), median(), mode(), stdev(), range().
 - **search** (`search.py`): Semantic search over board games using ChromaDB. Finds similar matches without requiring exact text.
 
 ### Key Files
