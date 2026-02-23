@@ -43,10 +43,13 @@ HELP_TEXT = """
 | `/tables` | Show database schema |
 | `/sample` | Show sample questions |
 | `/clear` | Clear the screen |
+| `/history` | Clear conversation history |
 | `/quit` | Exit the assistant |
 
 Or just ask a question in plain English!
 """
+
+MAX_HISTORY_PAIRS = 4
 
 SAMPLE_QUESTIONS = [
     "How many board games do we have in stock?",
@@ -234,8 +237,11 @@ def show_samples():
     console.print()
 
 
-def process_query(query: str) -> None:
-    """Process a user query and display the response with live progress."""
+def process_query(query: str, conversation_history: list[dict]) -> str:
+    """Process a user query and display the response with live progress.
+
+    Returns the answer text for storing in conversation history.
+    """
     console.print()
 
     progress = ProgressDisplay()
@@ -250,7 +256,7 @@ def process_query(query: str) -> None:
             console=console,
             refresh_per_second=10,
         ) as live:
-            answer = run_agent(query, on_progress=on_progress)
+            answer = run_agent(query, on_progress=on_progress, conversation_history=conversation_history)
     except Exception as e:
         answer = f"Sorry, I encountered an error: {e}"
 
@@ -265,6 +271,8 @@ def process_query(query: str) -> None:
     ))
     console.print()
 
+    return answer
+
 
 def main():
     """Main entry point - interactive TUI."""
@@ -274,7 +282,7 @@ def main():
         if not DB_PATH.exists():
             init_db()
         console.print(f"[bold]Question:[/bold] {query}")
-        process_query(query)
+        process_query(query, [])
         return
 
     # Initialize database if needed
@@ -285,6 +293,9 @@ def main():
     # Clear screen and show welcome
     console.clear()
     show_welcome()
+
+    # Conversation history (stores Q&A pairs for context)
+    conversation_history: list[dict] = []
 
     # Main interaction loop
     while True:
@@ -321,13 +332,27 @@ def main():
                 show_welcome()
                 continue
 
+            elif cmd == "/history":
+                conversation_history.clear()
+                console.print("[dim]Conversation history cleared.[/dim]")
+                continue
+
             elif cmd.startswith("/"):
                 console.print(f"[yellow]Unknown command: {cmd}[/yellow]")
                 console.print("[dim]Type /help for available commands[/dim]")
                 continue
 
             # Process as a natural language query
-            process_query(user_input)
+            answer = process_query(user_input, conversation_history)
+
+            # Add Q&A pair to history
+            conversation_history.append({"role": "user", "content": user_input})
+            conversation_history.append({"role": "assistant", "content": answer})
+
+            # Trim history to max pairs (each pair is 2 messages)
+            max_messages = MAX_HISTORY_PAIRS * 2
+            while len(conversation_history) > max_messages:
+                conversation_history.pop(0)
 
         except KeyboardInterrupt:
             console.print()

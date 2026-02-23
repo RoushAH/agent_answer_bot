@@ -113,6 +113,7 @@ def run_agent(
     user_query: str,
     on_progress: Optional[ProgressCallback] = None,
     debug: bool = False,
+    conversation_history: Optional[list[dict]] = None,
 ) -> str:
     """
     Run the agent loop to answer a user query.
@@ -121,6 +122,7 @@ def run_agent(
         user_query: The user's question
         on_progress: Callback for progress updates (event, tool, detail)
         debug: If True, print raw model responses
+        conversation_history: Optional list of previous Q&A pairs for context
 
     Returns:
         The final answer string
@@ -130,7 +132,10 @@ def run_agent(
             on_progress(event, tool, detail)
 
     system = get_system_prompt()
-    messages = [{"role": "user", "content": user_query}]
+    messages = []
+    if conversation_history:
+        messages.extend(conversation_history)
+    messages.append({"role": "user", "content": user_query})
 
     for turn in range(MAX_TURNS):
         # Call Claude with retry logic for invalid JSON
