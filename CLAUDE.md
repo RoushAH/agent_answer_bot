@@ -18,6 +18,9 @@ python main.py
 # Run with a single question
 python main.py "What are our top selling games?"
 
+# Run HTTP API server
+uvicorn api:app --reload
+
 # Initialize/reset the database
 python database.py
 
@@ -52,7 +55,8 @@ Two tools available to the agent:
 ### Key Files
 
 - `main.py` - Interactive TUI using Rich, handles commands (`/help`, `/tables`, `/quit`)
-- `agent.py` - Core agent loop, Bedrock API calls, retry logic for invalid JSON
+- `api.py` - FastAPI HTTP server for embedding in other systems
+- `agent.py` - Core agent loop, LLM API calls, retry logic for invalid JSON
 - `schema.py` - JSON action validation, extracts first valid JSON object from response
 - `database.py` - SQLite setup, schema, seed data for cafe inventory/sales/rentals
 - `calculator.py` - Safe math evaluator using Python AST
