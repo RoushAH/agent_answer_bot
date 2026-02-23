@@ -38,13 +38,19 @@ def get_system_prompt() -> str:
 TOOLS:
 1. query - Execute SQL SELECT queries
 2. calculate - Evaluate math expressions (numbers and +, -, *, / only)
+3. search - Semantic search for board games (finds similar matches, not exact)
 
 RESPONSE FORMAT:
 You must respond with EXACTLY ONE JSON object per message. No other text, no explanations.
 
 {{"action": "query", "sql": "SELECT ..."}}
 {{"action": "calculate", "expression": "123.45 + 67.89"}}
+{{"action": "search", "query": "cooperative family games", "n": 5}}
 {{"action": "answer", "text": "Your final answer here"}}
+
+WHEN TO USE SEARCH VS QUERY:
+- Use "search" when looking for games by description/vibe (e.g., "games about building", "fun party games")
+- Use "query" when you need exact data (e.g., prices, stock levels, sales figures)
 
 ONE action at a time. You will see the result, then can do the next action.
 
@@ -153,6 +159,17 @@ def execute_action(action: dict) -> tuple[str, bool]:
         except ValueError as e:
             return f"Calculation error: {e}. Remember: calculator only supports numbers and +, -, *, /, parentheses. Try a different approach.", True
 
+    elif action_type == "search":
+        try:
+            from search import search_games
+            n = action.get("n", 5)
+            results = search_games(action["query"], n=n)
+            if not results:
+                return "No matching games found.", False
+            return json.dumps(results, indent=2), False
+        except Exception as e:
+            return f"Search error: {e}", True
+
     return "Unknown action type.", True
 
 
@@ -231,6 +248,8 @@ def run_agent(
             emit("tool_call", "query", sql)
         elif action_type == "calculate":
             emit("tool_call", "calculate", action["expression"])
+        elif action_type == "search":
+            emit("tool_call", "search", action["query"])
 
         # Execute the action and get result
         result, is_error = execute_action(action)
@@ -248,7 +267,13 @@ def run_agent(
                 emit("result", "query", f"{len(data)} row(s) returned")
             except (json.JSONDecodeError, TypeError):
                 emit("result", "query", result[:50])
-        else:
+        elif action_type == "search":
+            try:
+                data = json.loads(result)
+                emit("result", "search", f"{len(data)} game(s) found")
+            except (json.JSONDecodeError, TypeError):
+                emit("result", "search", result[:50])
+        elif action_type == "calculate":
             emit("result", "calculate", result)
 
         # Add assistant response and tool result to conversation

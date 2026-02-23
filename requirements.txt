@@ -3,3 +3,4 @@ rich
 requests
 fastapi
 uvicorn
+chromadb
