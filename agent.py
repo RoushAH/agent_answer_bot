@@ -1,14 +1,28 @@
-"""Core agent loop using Claude via AWS Bedrock."""
+"""Core agent loop with configurable LLM backend."""
 
 import json
 from typing import Callable, Optional
-import boto3
 
 from database import query_db, get_schema
 from calculator import calculate
 from schema import validate_action
 
-MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+# =============================================================================
+# LLM CONFIGURATION
+# =============================================================================
+# Change BACKEND to switch between providers. Options: "bedrock", "ollama"
+
+BACKEND = "bedrock"
+
+# AWS Bedrock settings
+BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+
+# Ollama settings (local)
+OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_MODEL = "llama3"  # Options: llama3, mistral, mixtral, phi3, codellama, etc.
+
+# =============================================================================
+
 MAX_RETRIES = 3
 MAX_TURNS = 10
 
@@ -64,11 +78,13 @@ Today's date is 2026-02-20
 
 
 def call_bedrock(messages: list[dict], system: str) -> str:
-    """Call Claude via Bedrock and return the response text."""
+    """Call Claude via AWS Bedrock and return the response text."""
+    import boto3
+
     client = boto3.client("bedrock-runtime")
 
     response = client.invoke_model(
-        modelId=MODEL_ID,
+        modelId=BEDROCK_MODEL_ID,
         body=json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 1024,
@@ -79,6 +95,37 @@ def call_bedrock(messages: list[dict], system: str) -> str:
 
     result = json.loads(response["body"].read())
     return result["content"][0]["text"]
+
+
+def call_ollama(messages: list[dict], system: str) -> str:
+    """Call a local Ollama model and return the response text."""
+    import requests
+
+    # Ollama uses OpenAI-style messages with system as first message
+    ollama_messages = [{"role": "system", "content": system}] + messages
+
+    response = requests.post(
+        f"{OLLAMA_BASE_URL}/api/chat",
+        json={
+            "model": OLLAMA_MODEL,
+            "messages": ollama_messages,
+            "stream": False,
+        },
+        timeout=120,
+    )
+    response.raise_for_status()
+
+    return response.json()["message"]["content"]
+
+
+def call_llm(messages: list[dict], system: str) -> str:
+    """Call the configured LLM backend."""
+    if BACKEND == "bedrock":
+        return call_bedrock(messages, system)
+    elif BACKEND == "ollama":
+        return call_ollama(messages, system)
+    else:
+        raise ValueError(f"Unknown backend: {BACKEND}")
 
 
 def execute_action(action: dict) -> tuple[str, bool]:
@@ -145,7 +192,7 @@ def run_agent(
 
         for attempt in range(MAX_RETRIES):
             emit("thinking", "", f"Turn {turn + 1}")
-            response_text = call_bedrock(messages, system)
+            response_text = call_llm(messages, system)
 
             if debug:
                 print(f"[DEBUG] Turn {turn+1}, Attempt {attempt+1}:")

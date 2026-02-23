@@ -28,7 +28,7 @@ python calculator.py
 python agent.py
 ```
 
-**Prerequisites:** Python 3.10+, AWS credentials configured with Bedrock access.
+**Prerequisites:** Python 3.10+, plus either AWS credentials (for Bedrock) or Ollama running locally.
 
 ## Architecture
 
@@ -61,6 +61,9 @@ Two tools available to the agent:
 
 Six tables: `board_games`, `game_sales`, `table_rentals`, `food_bev_items`, `food_bev_orders`, `operating_expenses`. Run `/tables` in the TUI or see `database.py:get_schema()` for full schema.
 
-### Model Configuration
+### LLM Backend Configuration
 
-Uses `anthropic.claude-3-haiku-20240307-v1:0` via AWS Bedrock. Model ID defined in `agent.py:MODEL_ID`.
+Configurable at the top of `agent.py`. Change `BACKEND` to switch providers:
+
+- **`bedrock`** (default): AWS Bedrock with Claude 3 Haiku. Requires AWS credentials.
+- **`ollama`**: Local Ollama instance. Set `OLLAMA_MODEL` to your preferred model (llama3, mistral, mixtral, phi3, etc.).
