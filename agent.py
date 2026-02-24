@@ -63,7 +63,7 @@ WHEN TO USE SEARCH VS QUERY:
 WHAT-IF SCENARIOS (use "whatif" action):
 - scenario_type: "price_change" - params: {{"target": "games"|"food"|"tables"|item_name, "change_percent": number}}
 - scenario_type: "volume_change" - params: {{"target": item_name, "quantity_change": number}}
-- scenario_type: "expense_change" - params: {{"category": "all"|"rent"|"labor"|etc, "change_percent": number}}
+- scenario_type: "expense_change" - params: {{"category": "all"|"rent"|"labor"|etc, "change_percent": number, "month": "2026-01"|"january"|optional}}
 - scenario_type: "hours_change" - params: {{"hours_change": number}}
 Example: "What if game prices increased 15%?" → {{"action": "whatif", "scenario_type": "price_change", "params": {{"target": "games", "change_percent": 15}}}}
 

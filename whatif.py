@@ -192,25 +192,45 @@ def whatif_volume_change(target: str, quantity_change: int) -> dict:
     return {"error": f"Could not find item matching '{target}'"}
 
 
-def whatif_expense_change(category: str, change_percent: float) -> dict:
+def whatif_expense_change(category: str, change_percent: float, month: str = None) -> dict:
     """
     Calculate impact of operating expense changes.
 
     Args:
         category: "all", "rent", "labor", "utilities", etc.
         change_percent: Percentage change
+        month: Optional month filter (e.g., "2026-01" or "january")
 
     Returns:
         Dict with expense impact on net profit
     """
     multiplier = 1 + (change_percent / 100)
 
+    # Build month filter clause
+    month_clause = ""
+    month_label = "all time"
+    if month:
+        # Handle month names like "january" or formats like "2026-01"
+        month_lower = month.lower()
+        month_map = {
+            "january": "2026-01", "jan": "2026-01",
+            "february": "2026-02", "feb": "2026-02",
+        }
+        month_value = month_map.get(month_lower, month)
+        month_clause = f"AND month = '{month_value}'"
+        month_label = month_value
+
     if category.lower() == "all":
-        current = query_db("SELECT SUM(amount) as total FROM operating_expenses")[0]
+        current = query_db(f"SELECT SUM(amount) as total FROM operating_expenses WHERE 1=1 {month_clause}")[0]
+
+        if not current["total"]:
+            return {"error": f"No expenses found for {month_label}"}
+
         new_total = current["total"] * multiplier
 
         return {
             "scenario": f"All operating expenses {'increased' if change_percent > 0 else 'decreased'} by {abs(change_percent)}%",
+            "period": month_label,
             "current_expenses": round(current["total"], 2),
             "projected_expenses": round(new_total, 2),
             "expense_change": round(new_total - current["total"], 2),
@@ -222,15 +242,17 @@ def whatif_expense_change(category: str, change_percent: float) -> dict:
             SELECT SUM(amount) as total
             FROM operating_expenses
             WHERE LOWER(category) LIKE '%{category.lower()}%'
+            {month_clause}
         """)[0]
 
         if not current["total"]:
-            return {"error": f"No expenses found matching category '{category}'"}
+            return {"error": f"No expenses found matching category '{category}' for {month_label}"}
 
         new_total = current["total"] * multiplier
 
         return {
             "scenario": f"{category.title()} expenses {'increased' if change_percent > 0 else 'decreased'} by {abs(change_percent)}%",
+            "period": month_label,
             "current_expenses": round(current["total"], 2),
             "projected_expenses": round(new_total, 2),
             "expense_change": round(new_total - current["total"], 2),
