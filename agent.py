@@ -1,7 +1,9 @@
 """Core agent loop with configurable LLM backend."""
 
 import json
-from datetime import date
+import logging
+from datetime import date, datetime
+from pathlib import Path
 from typing import Callable, Optional
 
 from database import query_db, get_schema
@@ -9,18 +11,35 @@ from calculator import calculate
 from schema import validate_action
 
 # =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+logger = logging.getLogger("agent")
+logger.setLevel(logging.DEBUG)
+
+# File handler - logs everything to file
+file_handler = logging.FileHandler(LOG_DIR / "agent.log", encoding="utf-8")
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter(
+    "%(asctime)s | %(levelname)s | %(message)s"
+))
+logger.addHandler(file_handler)
+
+# =============================================================================
 # LLM CONFIGURATION
 # =============================================================================
 # Change BACKEND to switch between providers. Options: "bedrock", "ollama"
 
-BACKEND = "bedrock"
+BACKEND = "ollama"
 
 # AWS Bedrock settings
 BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
 
 # Ollama settings (local)
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3"  # Options: llama3, mistral, mixtral, phi3, codellama, etc.
+OLLAMA_MODEL = "qwen3.5:9b"
 
 # =============================================================================
 
@@ -39,15 +58,13 @@ def get_system_prompt() -> str:
 TOOLS:
 1. query - Execute SQL SELECT queries
 2. calculate - Evaluate math expressions and statistics (supports +, -, *, /, mean, median, mode, stdev, range)
-3. search - Semantic search for board games (finds similar matches, not exact)
-4. whatif - Scenario analysis ("what if prices increased 10%?", "what if we sold 20 more Catans?")
+3. whatif - Scenario analysis ("what if prices increased 10%?", "what if we sold 20 more Catans?")
 
 RESPONSE FORMAT:
 You must respond with EXACTLY ONE JSON object per message. No other text, no explanations.
 
 {{"action": "query", "sql": "SELECT ..."}}
 {{"action": "calculate", "expression": "123.45 + 67.89"}}
-{{"action": "search", "query": "cooperative family games", "n": 5}}
 {{"action": "whatif", "scenario_type": "price_change", "params": {{"target": "games", "change_percent": 10}}}}
 {{"action": "answer", "text": "Your final answer here"}}
 
@@ -55,10 +72,6 @@ ANSWER FORMAT:
 The "answer" text MUST be natural language for a human reader, NOT raw JSON or data.
 - WRONG: {{"action": "answer", "text": "{{\\"avg\\": 50.99, \\"median\\": 44.99}}"}}
 - RIGHT: {{"action": "answer", "text": "The average game price is $50.99, with a median of $44.99."}}
-
-WHEN TO USE SEARCH VS QUERY:
-- Use "search" when looking for games by description/vibe (e.g., "games about building", "fun party games")
-- Use "query" when you need exact data (e.g., prices, stock levels, sales figures)
 
 WHAT-IF SCENARIOS (use "whatif" action):
 - scenario_type: "price_change" - params: {{"target": "games"|"food"|"tables"|item_name, "change_percent": number}}
@@ -81,6 +94,13 @@ CRITICAL RULES:
    - Example: {{"action": "calculate", "expression": "mean(49.99, 39.99, 44.99)"}}
    - WRONG: {{"action": "calculate", "expression": "SELECT ... - 92"}}
    - RIGHT: {{"action": "calculate", "expression": "553.19 - 92"}}
+5. For comparisons (percentages, ratios, "X vs Y", share of total):
+   - You will often need MULTIPLE queries to get all the numbers
+   - Example: "What percentage of inventory is Strategy games?" needs TWO queries:
+     1. Query for Strategy stock: SELECT SUM(in_stock) FROM board_games WHERE category='Strategy'
+     2. Query for total stock: SELECT SUM(in_stock) FROM board_games
+     3. Then calculate: strategy_count / total_count * 100
+   - Do NOT try to answer comparisons with only one query result
 
 DATA WE HAVE:
 - Board game inventory (names, prices, wholesale costs, stock levels)
@@ -132,22 +152,48 @@ def call_bedrock(messages: list[dict], system: str) -> str:
 def call_ollama(messages: list[dict], system: str) -> str:
     """Call a local Ollama model and return the response text."""
     import requests
+    import time
 
     # Ollama uses OpenAI-style messages with system as first message
     ollama_messages = [{"role": "system", "content": system}] + messages
 
+    request_body = {
+        "model": OLLAMA_MODEL,
+        "messages": ollama_messages,
+        "stream": False,
+        "options": {
+            "temperature": 1.0,
+            "top_p": 0.8,
+            "top_k": 40,
+            "num_predict": 4096,
+        },
+    }
+
+    # Disable thinking mode for Qwen3 models
+    if "qwen3" in OLLAMA_MODEL.lower():
+        request_body["think"] = False
+
+    # Log the request (just user messages, not system prompt)
+    user_msgs = [m for m in messages if m["role"] == "user"]
+    logger.debug(f"REQUEST | model={OLLAMA_MODEL} | messages={len(messages)} | last_user={user_msgs[-1]['content'][:200] if user_msgs else 'none'}...")
+
+    start = time.perf_counter()
     response = requests.post(
         f"{OLLAMA_BASE_URL}/api/chat",
-        json={
-            "model": OLLAMA_MODEL,
-            "messages": ollama_messages,
-            "stream": False,
-        },
-        timeout=120,
+        json=request_body,
+        timeout=180,
     )
     response.raise_for_status()
+    elapsed = time.perf_counter() - start
 
-    return response.json()["message"]["content"]
+    result = response.json()
+    content = result["message"]["content"]
+
+    # Log response with timing and token info
+    tokens = result.get("eval_count", "?")
+    logger.debug(f"RESPONSE | {elapsed:.2f}s | tokens={tokens} | content={content!r}")
+
+    return content
 
 
 def call_llm(messages: list[dict], system: str) -> str:
@@ -237,6 +283,9 @@ def run_agent(
         messages.extend(conversation_history)
     messages.append({"role": "user", "content": user_query})
 
+    # Track whether we've had a successful tool call this query
+    has_tool_result = False
+
     for turn in range(MAX_TURNS):
         # Call Claude with retry logic for invalid JSON
         response_text = None
@@ -272,6 +321,15 @@ def run_agent(
 
         # Check if this is the final answer
         if action_type == "answer":
+            # Guardrail: require at least one successful tool call before answering
+            if not has_tool_result:
+                emit("guardrail", "", "No tool call yet, forcing query...")
+                messages.append({"role": "assistant", "content": cleaned_response})
+                messages.append({
+                    "role": "user",
+                    "content": "You must query the database before answering. Do not answer from memory or conversation history. Use a query action first."
+                })
+                continue
             emit("answer", "", "")
             return action["text"]
 
@@ -291,6 +349,10 @@ def run_agent(
 
         # Execute the action and get result
         result, is_error = execute_action(action)
+
+        # Track successful tool calls
+        if not is_error:
+            has_tool_result = True
 
         # Show result summary
         if is_error:

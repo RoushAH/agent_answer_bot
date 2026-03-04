@@ -4,7 +4,7 @@ import json
 import re
 from typing import Optional
 
-VALID_ACTIONS = {"query", "calculate", "search", "whatif", "answer"}
+VALID_ACTIONS = {"query", "calculate", "whatif", "answer"}
 
 
 def _fix_json_newlines(s: str) -> str:
@@ -52,12 +52,6 @@ def _validate_fields(data: dict) -> Optional[dict]:
             return None
     elif action == "calculate":
         if "expression" not in data or not isinstance(data["expression"], str):
-            return None
-    elif action == "search":
-        if "query" not in data or not isinstance(data["query"], str):
-            return None
-        # n is optional, default to 5
-        if "n" in data and not isinstance(data["n"], int):
             return None
     elif action == "whatif":
         if "scenario_type" not in data or not isinstance(data["scenario_type"], str):

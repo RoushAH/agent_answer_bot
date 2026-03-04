@@ -122,6 +122,9 @@ def calculate(expression: str) -> float:
     Raises:
         ValueError: If the expression is invalid or uses unsupported operations
     """
+    # Strip currency symbols that models sometimes include
+    expression = expression.replace("$", "").replace("€", "").replace("£", "")
+
     try:
         tree = ast.parse(expression, mode='eval')
         result = _eval_node(tree)
