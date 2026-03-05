@@ -39,7 +39,7 @@ BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
 
 # Ollama settings (local)
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "qwen3.5:9b"
+OLLAMA_MODEL = "ministral-3:8b"
 
 # =============================================================================
 

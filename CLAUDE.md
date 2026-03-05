@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Board Game Cafe Assistant - An AI-powered assistant that answers natural language questions about a board game cafe's data using Claude 3 Haiku via AWS Bedrock.
+Board Game Cafe Assistant - An AI-powered assistant that answers natural language questions about a board game cafe's data. Supports multiple LLM backends (Ollama local models, AWS Bedrock).
 
 ## Build & Development Commands
 
@@ -29,6 +29,12 @@ python calculator.py
 
 # Test the agent directly
 python agent.py
+
+# Run benchmark suite
+python benchmark.py
+
+# Run single benchmark case
+python benchmark.py count_games
 ```
 
 **Prerequisites:** Python 3.10+, plus either AWS credentials (for Bedrock) or Ollama running locally.
@@ -71,6 +77,7 @@ Three tools available to the agent (defined in `schema.py:VALID_ACTIONS`):
 - `calculator.py` - Safe math evaluator using Python AST
 - `whatif.py` - Scenario analysis engine for business projections
 - `search.py` - Semantic search using ChromaDB (not currently enabled in agent)
+- `benchmark.py` - LLM evaluation suite with 13 test cases across 7 categories
 
 ### Database Schema
 
@@ -80,5 +87,16 @@ Six tables: `board_games`, `game_sales`, `table_rentals`, `food_bev_items`, `foo
 
 Configurable at the top of `agent.py`. Change `BACKEND` to switch providers:
 
-- **`ollama`** (default): Local Ollama instance. Set `OLLAMA_MODEL` to your preferred model (llama3, mistral, mixtral, phi3, etc.).
+- **`ollama`** (default): Local Ollama instance. Default model: `ministral-3:8b` (97.6% benchmark score, ~92s/query).
 - **`bedrock`**: AWS Bedrock with Claude 3 Haiku. Requires AWS credentials.
+
+### Benchmarking
+
+Run `python benchmark.py` to evaluate model performance. The benchmark suite tests 13 cases across 7 categories (simple queries, multi-step reasoning, calculations, comparisons, what-if scenarios, follow-ups, edge cases).
+
+Top performing local models (tested March 2026):
+| Model | Score | Avg Time |
+|-------|-------|----------|
+| ministral-3:8b | 97.6% | 92s |
+| qwen3.5:4b-fast | 97.6% | 130s |
+| gemma3:4b | 89.8% | 110s |
