@@ -1,13 +1,13 @@
 # Board Game Cafe Assistant
 
-An AI-powered assistant that answers natural language questions about a board game cafe's data. Supports multiple LLM backends (AWS Bedrock, Ollama).
+An AI-powered assistant that answers natural language questions about a board game cafe's data. Supports multiple LLM backends (Ollama local models, AWS Bedrock).
 
 ## Features
 
 - **Natural Language Queries** - Ask questions in plain English about inventory, sales, rentals, and orders
 - **Interactive TUI** - Beautiful terminal interface built with Rich
 - **HTTP API** - Embed in other systems via REST endpoint
-- **Agentic Architecture** - LLM autonomously decides when to query, calculate, search, or run scenarios
+- **Agentic Architecture** - LLM autonomously decides when to query, calculate, or run scenarios
 - **Conversation History** - Follow-up questions maintain context (last 4 exchanges)
 - **Configurable Backend** - Switch between AWS Bedrock (Claude) and local Ollama models
 - **Safe Execution** - SQL restricted to SELECT; calculator uses AST parsing; all tools whitelisted
@@ -48,14 +48,14 @@ uvicorn api:app --reload
 Edit the top of `agent.py`:
 
 ```python
-BACKEND = "bedrock"  # or "ollama"
+BACKEND = "ollama"  # or "bedrock"
 
-# Bedrock settings
-BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
-
-# Ollama settings
+# Ollama settings (local)
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3"  # or mistral, mixtral, phi3, etc.
+OLLAMA_MODEL = "ministral-3:8b"  # or other Ollama models
+
+# AWS Bedrock settings
+BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
 ```
 
 ## How It Works
@@ -73,7 +73,6 @@ The assistant uses an agentic loop:
 |------|-------------|
 | `query` | Execute SELECT queries against the SQLite database |
 | `calculate` | Math expressions and statistics (mean, median, mode, stdev, range) |
-| `search` | Semantic search for games by description/vibe using ChromaDB |
 | `whatif` | Scenario analysis ("What if prices increased 10%?") |
 
 ### What-If Scenarios
@@ -101,7 +100,6 @@ The sample database includes:
 - "How many board games do we have in stock?"
 - "What are our top 3 selling games?"
 - "What was our average daily revenue?"
-- "Find me cooperative games for families"
 - "What if we raised game prices by 15%?"
 - "What would profit look like if we sold 50 more coffees?"
 
@@ -148,9 +146,27 @@ Interactive API docs available at `http://localhost:8000/docs`
 ├── database.py      # SQLite database setup and queries
 ├── calculator.py    # Safe math/statistics evaluator (AST-based)
 ├── schema.py        # JSON action validation
-├── search.py        # Semantic search with ChromaDB
 ├── whatif.py        # Scenario analysis engine
+├── benchmark.py     # LLM evaluation suite (13 test cases)
+├── search.py        # Semantic search with ChromaDB (not currently enabled)
+├── logs/            # Agent debug logs
 └── requirements.txt # Dependencies
+```
+
+## Benchmarking
+
+Run `python benchmark.py` to evaluate model performance across 13 test cases in 7 categories:
+- Simple queries
+- Multi-step reasoning
+- Calculations
+- Comparisons
+- What-if scenarios
+- Follow-up questions
+- Edge cases
+
+Run a single test case:
+```bash
+python benchmark.py count_games
 ```
 
 ## Security
