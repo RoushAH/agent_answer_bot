@@ -2,10 +2,13 @@
 
 import hashlib
 import json
+import logging
 import sqlite3
 import time
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger("cache")
 
 # =============================================================================
 # CONFIGURATION
@@ -20,33 +23,36 @@ CACHE_TTL_SECONDS = 86400 * 7  # 7 days
 
 def init_cache() -> None:
     """Create (or open) the SQLite database and ensure tables exist."""
-    conn = sqlite3.connect(CACHE_DB_PATH)
-    cursor = conn.cursor()
-    
-    # Create llm_responses table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS llm_responses (
-            id INTEGER PRIMARY KEY,
-            cache_key TEXT UNIQUE NOT NULL,
-            question TEXT,
-            response TEXT NOT NULL,
-            created_at REAL NOT NULL
-        )
-    """)
-    
-    # Create sql_results table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sql_results (
-            id INTEGER PRIMARY KEY,
-            cache_key TEXT UNIQUE NOT NULL,
-            sql_query TEXT,
-            result TEXT NOT NULL,
-            created_at REAL NOT NULL
-        )
-    """)
-    
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(CACHE_DB_PATH)
+        cursor = conn.cursor()
+
+        # Create llm_responses table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS llm_responses (
+                id INTEGER PRIMARY KEY,
+                cache_key TEXT UNIQUE NOT NULL,
+                question TEXT,
+                response TEXT NOT NULL,
+                created_at REAL NOT NULL
+            )
+        """)
+
+        # Create sql_results table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sql_results (
+                id INTEGER PRIMARY KEY,
+                cache_key TEXT UNIQUE NOT NULL,
+                sql_query TEXT,
+                result TEXT NOT NULL,
+                created_at REAL NOT NULL
+            )
+        """)
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to initialize cache: {e}")
 
 
 # Initialize cache on module load
@@ -86,54 +92,61 @@ def make_cache_key(question: str, conversation_history: Optional[list]) -> str:
 def get_llm_response(cache_key: str) -> Optional[str]:
     """
     Retrieve a cached LLM response by cache key.
-    
+
     Args:
         cache_key: The cache key to look up
-    
+
     Returns:
         The cached response string if found and not expired, None otherwise
     """
-    conn = sqlite3.connect(CACHE_DB_PATH)
-    cursor = conn.cursor()
-    
-    current_time = time.time()
-    cutoff_time = current_time - CACHE_TTL_SECONDS
-    
-    cursor.execute("""
-        SELECT response FROM llm_responses
-        WHERE cache_key = ? AND created_at >= ?
-    """, (cache_key, cutoff_time))
-    
-    row = cursor.fetchone()
-    conn.close()
-    
-    if row:
-        return row[0]
-    return None
+    try:
+        conn = sqlite3.connect(CACHE_DB_PATH)
+        cursor = conn.cursor()
+
+        current_time = time.time()
+        cutoff_time = current_time - CACHE_TTL_SECONDS
+
+        cursor.execute("""
+            SELECT response FROM llm_responses
+            WHERE cache_key = ? AND created_at >= ?
+        """, (cache_key, cutoff_time))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return row[0]
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to get cached LLM response: {e}")
+        return None
 
 
 def set_llm_response(cache_key: str, question: str, response: str) -> None:
     """
     Store (or update) an LLM response in the cache.
-    
+
     Args:
         cache_key: The cache key
         question: The original question
         response: The LLM response text
     """
-    conn = sqlite3.connect(CACHE_DB_PATH)
-    cursor = conn.cursor()
-    
-    current_time = time.time()
-    
-    # Use INSERT OR REPLACE to handle upsert
-    cursor.execute("""
-        INSERT OR REPLACE INTO llm_responses (cache_key, question, response, created_at)
-        VALUES (?, ?, ?, ?)
-    """, (cache_key, question, response, current_time))
-    
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(CACHE_DB_PATH)
+        cursor = conn.cursor()
+
+        current_time = time.time()
+
+        # Use INSERT OR REPLACE to handle upsert
+        cursor.execute("""
+            INSERT OR REPLACE INTO llm_responses (cache_key, question, response, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (cache_key, question, response, current_time))
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to cache LLM response: {e}")
 
 # =============================================================================
 # SQL RESULT CACHE
@@ -142,59 +155,66 @@ def set_llm_response(cache_key: str, question: str, response: str) -> None:
 def get_sql_result(sql_query: str) -> Optional[str]:
     """
     Retrieve a cached SQL query result.
-    
+
     Args:
         sql_query: The SQL query string
-    
+
     Returns:
         The cached result string (JSON serialized) if found and not expired, None otherwise
     """
-    # Generate cache key from SQL query
-    cache_key = hashlib.sha256(sql_query.encode()).hexdigest()
-    
-    conn = sqlite3.connect(CACHE_DB_PATH)
-    cursor = conn.cursor()
-    
-    current_time = time.time()
-    cutoff_time = current_time - CACHE_TTL_SECONDS
-    
-    cursor.execute("""
-        SELECT result FROM sql_results
-        WHERE cache_key = ? AND created_at >= ?
-    """, (cache_key, cutoff_time))
-    
-    row = cursor.fetchone()
-    conn.close()
-    
-    if row:
-        return row[0]
-    return None
+    try:
+        # Generate cache key from SQL query
+        cache_key = hashlib.sha256(sql_query.encode()).hexdigest()
+
+        conn = sqlite3.connect(CACHE_DB_PATH)
+        cursor = conn.cursor()
+
+        current_time = time.time()
+        cutoff_time = current_time - CACHE_TTL_SECONDS
+
+        cursor.execute("""
+            SELECT result FROM sql_results
+            WHERE cache_key = ? AND created_at >= ?
+        """, (cache_key, cutoff_time))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return row[0]
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to get cached SQL result: {e}")
+        return None
 
 
 def set_sql_result(sql_query: str, result: str) -> None:
     """
     Store (or update) a SQL query result in the cache.
-    
+
     Args:
         sql_query: The SQL query string
         result: The query result (JSON serialized string)
     """
-    # Generate cache key from SQL query
-    cache_key = hashlib.sha256(sql_query.encode()).hexdigest()
-    
-    conn = sqlite3.connect(CACHE_DB_PATH)
-    cursor = conn.cursor()
-    
-    current_time = time.time()
-    
-    # Use INSERT OR REPLACE to handle upsert
-    cursor.execute("""
-        INSERT OR REPLACE INTO sql_results (cache_key, sql_query, result, created_at)
-        VALUES (?, ?, ?, ?)
-    """, (cache_key, sql_query, result, current_time))
-    
-    conn.commit()
-    conn.close()
+    try:
+        # Generate cache key from SQL query
+        cache_key = hashlib.sha256(sql_query.encode()).hexdigest()
+
+        conn = sqlite3.connect(CACHE_DB_PATH)
+        cursor = conn.cursor()
+
+        current_time = time.time()
+
+        # Use INSERT OR REPLACE to handle upsert
+        cursor.execute("""
+            INSERT OR REPLACE INTO sql_results (cache_key, sql_query, result, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (cache_key, sql_query, result, current_time))
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to cache SQL result: {e}")
 
 # =============================================================================
 # CACHE MANAGEMENT
@@ -202,26 +222,32 @@ def set_sql_result(sql_query: str, result: str) -> None:
 
 def clear_cache() -> None:
     """Delete all rows from both cache tables."""
-    conn = sqlite3.connect(CACHE_DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute("DELETE FROM llm_responses")
-    cursor.execute("DELETE FROM sql_results")
-    
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(CACHE_DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("DELETE FROM llm_responses")
+        cursor.execute("DELETE FROM sql_results")
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to clear cache: {e}")
 
 
 def clear_expired() -> None:
     """Delete rows older than CACHE_TTL_SECONDS from both tables."""
-    conn = sqlite3.connect(CACHE_DB_PATH)
-    cursor = conn.cursor()
-    
-    current_time = time.time()
-    cutoff_time = current_time - CACHE_TTL_SECONDS
-    
-    cursor.execute("DELETE FROM llm_responses WHERE created_at < ?", (cutoff_time,))
-    cursor.execute("DELETE FROM sql_results WHERE created_at < ?", (cutoff_time,))
-    
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(CACHE_DB_PATH)
+        cursor = conn.cursor()
+
+        current_time = time.time()
+        cutoff_time = current_time - CACHE_TTL_SECONDS
+
+        cursor.execute("DELETE FROM llm_responses WHERE created_at < ?", (cutoff_time,))
+        cursor.execute("DELETE FROM sql_results WHERE created_at < ?", (cutoff_time,))
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to clear expired cache entries: {e}")

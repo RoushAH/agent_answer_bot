@@ -227,10 +227,14 @@ def init_db() -> None:
 def query_db(sql: str) -> list[dict]:
     """Execute a SELECT query and return results as list of dicts."""
     # Check cache first
-    cached_result = get_sql_result(sql)
-    if cached_result is not None:
-        # Deserialize and return cached result
-        return json.loads(cached_result)
+    try:
+        cached_result = get_sql_result(sql)
+        if cached_result is not None:
+            # Deserialize and return cached result
+            return json.loads(cached_result)
+    except Exception:
+        # Cache read failure should not prevent query execution
+        pass
 
     # Execute query
     conn = get_connection()
@@ -241,8 +245,12 @@ def query_db(sql: str) -> list[dict]:
         results = [dict(row) for row in rows]
 
         # Cache the results
-        serialized_result = json.dumps(results)
-        set_sql_result(sql, serialized_result)
+        try:
+            serialized_result = json.dumps(results)
+            set_sql_result(sql, serialized_result)
+        except Exception:
+            # Cache write failure should not prevent returning results
+            pass
 
         return results
     finally:
