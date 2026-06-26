@@ -50,19 +50,131 @@ MAX_TURNS = 10
 ProgressCallback = Callable[[str, str, Optional[str]], None]
 
 
-def get_system_prompt() -> str:
-    """Build the system prompt with tool descriptions and schema."""
+def inject_plan_into_messages(messages: list[dict], plan_text: str) -> list[dict]:
+    """
+    Inject a plan into the message history to maintain context.
+
+    Adds the plan as an assistant message near the beginning of the conversation
+    so the LLM has it available for all subsequent turns.
+
+    Args:
+        messages: Current message list
+        plan_text: The plan text to inject (string or formatted string)
+
+    Returns:
+        Updated message list with plan injected
+    """
+    # Format the plan nicely
+    plan_message = f"Plan recorded:\n{plan_text}"
+
+    # Insert after the first user message (or at index 0 if no user messages yet)
+    insert_pos = 0
+    for i, msg in enumerate(messages):
+        if msg.get("role") == "user":
+            insert_pos = i + 1
+            break
+
+    # Create a copy and insert the plan
+    updated_messages = messages[:insert_pos] + [
+        {"role": "assistant", "content": plan_message}
+    ] + messages[insert_pos:]
+
+    return updated_messages
+
+
+def requires_plan(question: str) -> bool:
+    """
+    Detect if a question requires multi-step planning.
+
+    Returns True if the question appears to need multiple dependent operations.
+    Detection criteria:
+    - Comparison language (compare, vs, versus, difference between, more than, less than, which is better)
+    - Percentage or ratio questions (percentage, percent, %, ratio, proportion)
+    - Ranking with context (top X by, best, worst when combined with a second dimension)
+    - Compound questions (questions containing "and" paired with numeric intent words)
+
+    Args:
+        question: The user's question string
+
+    Returns:
+        Boolean indicating whether planning is recommended
+    """
+    if not question or len(question.strip()) < 10:
+        return False
+
+    q_lower = question.lower()
+
+    # Comparison language
+    comparison_keywords = [
+        "compare", " vs ", " vs. ", "versus", "difference between",
+        "more than", "less than", "which is better", "which sells better",
+        "which is higher", "which is lower", "which has more", "which has less",
+        " or ", "better than", "worse than"
+    ]
+    has_comparison = any(kw in q_lower for kw in comparison_keywords)
+
+    # Percentage/ratio questions
+    percentage_keywords = [
+        "percentage", "percent", " % ", "ratio", "proportion",
+        "share of", "portion of"
+    ]
+    has_percentage = any(kw in q_lower for kw in percentage_keywords)
+
+    # Ranking with context (top/best/worst combined with "by" or numeric dimension)
+    ranking_keywords = ["top ", "best ", "worst ", "highest ", "lowest "]
+    has_ranking = any(kw in q_lower for kw in ranking_keywords)
+    has_by_clause = " by " in q_lower
+    # Also consider "which X has the best Y" type questions as needing planning
+    has_which_best = "which" in q_lower and any(kw in q_lower for kw in ["best ", "worst ", "highest ", "lowest "])
+    ranking_with_context = has_ranking and (has_by_clause or has_which_best)
+
+    # Compound questions (multiple numeric intents)
+    numeric_intent = ["total", "average", "how many", "sum", "count", "revenue", "profit", "sales"]
+    and_present = " and " in q_lower
+    numeric_count = sum(1 for kw in numeric_intent if kw in q_lower)
+    is_compound = and_present and numeric_count >= 2
+
+    # Pure calculation questions don't need planning
+    pure_calc_keywords = ["what is", "calculate"]
+    is_pure_calc = any(kw in q_lower for kw in pure_calc_keywords) and not has_comparison
+    simple_math = any(op in question for op in ["+", "-", "*", "/", "percent of"])
+    if is_pure_calc and simple_math:
+        return False
+
+    return has_comparison or has_percentage or ranking_with_context or is_compound
+
+
+def get_system_prompt(needs_plan: bool = False) -> str:
+    """Build the system prompt with tool descriptions and schema.
+
+    Args:
+        needs_plan: If True, adds instructions for emitting a plan action first
+    """
     schema = get_schema()
+
+    plan_instruction = ""
+    if needs_plan:
+        plan_instruction = """
+MULTI-STEP PLANNING:
+This question appears to require multiple steps. Before executing any tools, emit a plan action:
+{{"action": "plan", "steps": "1. Query X\\n2. Query Y\\n3. Calculate Z"}}
+
+The plan should be a numbered list of the operations you will perform. Once you emit a plan,
+proceed directly to executing the steps - do NOT re-plan. The plan is never the final answer.
+"""
+
     return f"""You are a helpful assistant for a board game cafe/shop. Answer questions using ONLY the data in the database.
 
 TOOLS:
 1. query - Execute SQL SELECT queries
 2. calculate - Evaluate math expressions and statistics (supports +, -, *, /, mean, median, mode, stdev, range)
 3. whatif - Scenario analysis ("what if prices increased 10%?", "what if we sold 20 more Catans?")
-
+4. plan - Create a numbered plan for multi-step questions (use when comparisons, percentages, or multiple queries are needed)
+{plan_instruction}
 RESPONSE FORMAT:
 You must respond with EXACTLY ONE JSON object per message. No other text, no explanations.
 
+{{"action": "plan", "steps": "1. Query A\\n2. Query B\\n3. Compare"}}
 {{"action": "query", "sql": "SELECT ..."}}
 {{"action": "calculate", "expression": "123.45 + 67.89"}}
 {{"action": "whatif", "scenario_type": "price_change", "params": {{"target": "games", "change_percent": 10}}}}
@@ -215,6 +327,14 @@ def execute_action(action: dict) -> tuple[str, bool]:
     """
     action_type = action["action"]
 
+    if action_type == "plan":
+        # Plan actions are recorded but not "executed"
+        # They will be handled specially in the main loop
+        steps = action.get("steps", "")
+        if isinstance(steps, list):
+            steps = "\n".join(steps)
+        return f"Plan recorded:\n{steps}", False
+
     if action_type == "query":
         try:
             results = query_db(action["sql"])
@@ -277,7 +397,10 @@ def run_agent(
         if on_progress:
             on_progress(event, tool, detail)
 
-    system = get_system_prompt()
+    # Check if this question needs planning
+    needs_plan = requires_plan(user_query)
+    system = get_system_prompt(needs_plan=needs_plan)
+
     messages = []
     if conversation_history:
         messages.extend(conversation_history)
@@ -285,6 +408,11 @@ def run_agent(
 
     # Track whether we've had a successful tool call this query
     has_tool_result = False
+    # Track plan state
+    current_plan: Optional[str] = None
+    plan_recorded = False
+    # Track tool turns separately from total iterations
+    turns_used = 0
 
     for turn in range(MAX_TURNS):
         # Call Claude with retry logic for invalid JSON
@@ -319,6 +447,36 @@ def run_agent(
 
         action_type = action["action"]
 
+        # Handle plan action specially
+        if action_type == "plan":
+            if plan_recorded:
+                # Already have a plan, ignore duplicate plans
+                emit("retry", "", "Plan already recorded, skipping duplicate...")
+                messages.append({"role": "assistant", "content": cleaned_response})
+                messages.append({
+                    "role": "user",
+                    "content": "You already have a plan. Proceed with executing the steps."
+                })
+                continue
+
+            # Record the plan
+            steps = action.get("steps", "")
+            if isinstance(steps, list):
+                current_plan = "\n".join(steps)
+            else:
+                current_plan = steps
+
+            plan_recorded = True
+            emit("tool_call", "plan", current_plan[:100])
+
+            # Add plan to messages so it's visible in subsequent turns
+            messages.append({"role": "assistant", "content": cleaned_response})
+            messages.append({
+                "role": "user",
+                "content": f"Plan recorded:\n{current_plan}\n\nNow proceed with executing the steps."
+            })
+            continue
+
         # Check if this is the final answer
         if action_type == "answer":
             # Guardrail: require at least one successful tool call before answering
@@ -332,6 +490,11 @@ def run_agent(
                 continue
             emit("answer", "", "")
             return action["text"]
+
+        # Track tool turns (plan doesn't count)
+        turns_used += 1
+        if turns_used > MAX_TURNS:
+            return "Error: Agent reached maximum turns without providing an answer."
 
         # Show what tool is being used
         if action_type == "query":

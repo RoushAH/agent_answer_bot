@@ -117,6 +117,9 @@ class ProgressDisplay:
                 elif tool == "whatif":
                     line.append("What-If: ", style="bold green")
                     line.append(detail, style="cyan")
+                elif tool == "plan":
+                    line.append("Planning: ", style="bold blue dim")
+                    line.append(detail, style="dim")
                 elements.append(line)
 
             elif event == "executing":
@@ -152,6 +155,13 @@ class ProgressDisplay:
                 line = Text()
                 line.append(f"  {icon} ", style="bold")
                 line.append("Composing answer...", style="bold green")
+                elements.append(line)
+
+            elif event == "plan":
+                line = Text()
+                line.append(f"  {icon} ", style="bold")
+                line.append("Plan: ", style="bold blue dim")
+                line.append(detail, style="dim")
                 elements.append(line)
 
         return Group(*elements)

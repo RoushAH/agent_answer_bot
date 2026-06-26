@@ -1,0 +1,71 @@
+EXPECTED TEST OUTPUT
+====================
+
+BEFORE IMPLEMENTATION (All Tests Fail)
+---------------------------------------
+Most tests will fail with ImportError for missing functions:
+- ImportError: cannot import name 'requires_plan' from 'agent'
+- ImportError: cannot import name 'inject_plan_into_messages' from 'agent'
+- AssertionError: assert 'plan' in VALID_ACTIONS
+
+About 6 tests may pass because they test existing functionality:
+- test_non_plan_actions_still_validate_correctly_after_schema_change
+- test_agent_ask_does_not_inject_planning_instruction_when_requires_plan_is_false
+- test_api_response_* (with mocked implementation)
+- test_tui_* (basic rendering tests)
+
+Expected: ~24 FAILED, ~6 PASSED
+
+
+AFTER COMPLETE IMPLEMENTATION (All Tests Pass)
+-----------------------------------------------
+All 30 tests should pass:
+
+tests/test_plan_first_mode.py::test_requires_plan_returns_true_for_comparison_questions PASSED
+tests/test_plan_first_mode.py::test_requires_plan_returns_true_for_percentage_questions PASSED
+tests/test_plan_first_mode.py::test_requires_plan_returns_false_for_simple_lookup_questions PASSED
+tests/test_plan_first_mode.py::test_requires_plan_returns_false_for_single_step_calculation PASSED
+tests/test_plan_first_mode.py::test_requires_plan_detects_versus_language PASSED
+tests/test_plan_first_mode.py::test_requires_plan_detects_ranking_with_context PASSED
+tests/test_plan_first_mode.py::test_requires_plan_detects_compound_questions PASSED
+tests/test_plan_first_mode.py::test_plan_action_is_in_valid_actions PASSED
+tests/test_plan_first_mode.py::test_plan_action_validates_correctly_in_schema PASSED
+tests/test_plan_first_mode.py::test_plan_action_with_missing_steps_field_fails_validation PASSED
+tests/test_plan_first_mode.py::test_plan_action_with_empty_steps_fails_validation PASSED
+tests/test_plan_first_mode.py::test_plan_action_with_list_of_steps_validates PASSED
+tests/test_plan_first_mode.py::test_non_plan_actions_still_validate_correctly_after_schema_change PASSED
+tests/test_plan_first_mode.py::test_plan_is_stored_and_injected_into_subsequent_messages PASSED
+tests/test_plan_first_mode.py::test_plan_does_not_consume_a_turn_from_turns_used_budget PASSED
+tests/test_plan_first_mode.py::test_plan_is_not_emitted_more_than_once_per_question PASSED
+tests/test_plan_first_mode.py::test_agent_ask_injects_planning_instruction_when_requires_plan_is_true PASSED
+tests/test_plan_first_mode.py::test_agent_ask_does_not_inject_planning_instruction_when_requires_plan_is_false PASSED
+tests/test_plan_first_mode.py::test_api_response_includes_plan_field_when_plan_was_produced PASSED
+tests/test_plan_first_mode.py::test_api_response_plan_field_is_null_when_no_plan_was_produced PASSED
+tests/test_plan_first_mode.py::test_tui_renders_plan_panel_without_crashing PASSED
+tests/test_plan_first_mode.py::test_tui_plan_panel_contains_plan_text PASSED
+tests/test_plan_first_mode.py::test_full_integration_comparison_question_produces_correct_answer_via_plan PASSED
+tests/test_plan_first_mode.py::test_integration_percentage_question_uses_plan PASSED
+tests/test_plan_first_mode.py::test_simple_question_does_not_trigger_planning PASSED
+tests/test_plan_first_mode.py::test_plan_with_invalid_format_is_rejected PASSED
+tests/test_plan_first_mode.py::test_agent_handles_plan_followed_by_error_gracefully PASSED
+tests/test_plan_first_mode.py::test_max_turns_still_enforced_with_planning PASSED
+tests/test_plan_first_mode.py::test_plan_action_with_multiline_steps_validates PASSED
+tests/test_plan_first_mode.py::test_requires_plan_handles_edge_case_questions PASSED
+
+Expected: 30 PASSED, 0 FAILED
+
+
+RUN COMMANDS
+------------
+# Run all tests
+pytest tests/test_plan_first_mode.py -v
+
+# Run with coverage
+pytest tests/test_plan_first_mode.py --cov=agent --cov=schema --cov=api -v
+
+# Run specific category
+pytest tests/test_plan_first_mode.py -k "requires_plan" -v
+pytest tests/test_plan_first_mode.py -k "integration" -v
+
+# Stop on first failure
+pytest tests/test_plan_first_mode.py -x
