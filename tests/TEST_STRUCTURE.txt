@@ -1,0 +1,90 @@
+TEST STRUCTURE DIAGRAM
+======================
+
+tests/test_plan_first_mode.py (30 tests)
+│
+├── Detection Heuristic Tests (8 tests)
+│   ├── test_requires_plan_returns_true_for_comparison_questions
+│   ├── test_requires_plan_returns_true_for_percentage_questions
+│   ├── test_requires_plan_returns_false_for_simple_lookup_questions
+│   ├── test_requires_plan_returns_false_for_single_step_calculation
+│   ├── test_requires_plan_detects_versus_language
+│   ├── test_requires_plan_detects_ranking_with_context
+│   ├── test_requires_plan_detects_compound_questions
+│   └── test_requires_plan_handles_edge_case_questions
+│
+├── Schema Validation Tests (7 tests)
+│   ├── test_plan_action_is_in_valid_actions
+│   ├── test_plan_action_validates_correctly_in_schema
+│   ├── test_plan_action_with_missing_steps_field_fails_validation
+│   ├── test_plan_action_with_empty_steps_fails_validation
+│   ├── test_plan_action_with_list_of_steps_validates
+│   ├── test_plan_action_with_multiline_steps_validates
+│   └── test_non_plan_actions_still_validate_correctly_after_schema_change
+│
+├── Agentic Loop Tests (3 tests)
+│   ├── test_plan_is_stored_and_injected_into_subsequent_messages
+│   ├── test_plan_does_not_consume_a_turn_from_turns_used_budget
+│   └── test_plan_is_not_emitted_more_than_once_per_question
+│
+├── System Prompt Tests (2 tests)
+│   ├── test_agent_ask_injects_planning_instruction_when_requires_plan_is_true
+│   └── test_agent_ask_does_not_inject_planning_instruction_when_requires_plan_is_false
+│
+├── API Response Tests (2 tests)
+│   ├── test_api_response_includes_plan_field_when_plan_was_produced
+│   └── test_api_response_plan_field_is_null_when_no_plan_was_produced
+│
+├── TUI Rendering Tests (2 tests)
+│   ├── test_tui_renders_plan_panel_without_crashing
+│   └── test_tui_plan_panel_contains_plan_text
+│
+├── Integration Tests (3 tests)
+│   ├── test_full_integration_comparison_question_produces_correct_answer_via_plan
+│   ├── test_integration_percentage_question_uses_plan
+│   └── test_simple_question_does_not_trigger_planning
+│
+└── Edge Case Tests (5 tests)
+    ├── test_plan_with_invalid_format_is_rejected
+    ├── test_agent_handles_plan_followed_by_error_gracefully
+    └── test_max_turns_still_enforced_with_planning
+
+
+FILES TESTED:
+=============
+├── agent.py
+│   ├── requires_plan()
+│   ├── inject_plan_into_messages()
+│   ├── run_agent()
+│   ├── get_system_prompt()
+│   └── MAX_TURNS accounting
+│
+├── schema.py
+│   ├── VALID_ACTIONS
+│   └── validate_action()
+│
+├── api.py
+│   ├── Answer model
+│   └── ask_question()
+│
+└── main.py
+    └── ProgressDisplay
+
+
+MOCKING STRATEGY:
+=================
+- agent.call_llm          → Mocked LLM responses
+- agent.query_db          → Mocked database results
+- agent.calculate         → Mocked calculation results
+- agent.requires_plan     → Controlled True/False
+- api.run_agent           → Mocked agent responses
+- Rich Console output     → Captured to StringIO
+
+
+TEST ISOLATION:
+===============
+Each test uses:
+- unittest.mock.patch for dependencies
+- Fresh mock objects per test
+- No shared state between tests
+- Independent execution order
