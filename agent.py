@@ -2,6 +2,8 @@
 
 import json
 import logging
+import requests
+import time
 from datetime import date, datetime
 from pathlib import Path
 from typing import Callable, Optional
@@ -261,18 +263,24 @@ def call_bedrock(messages: list[dict], system: str) -> str:
     return result["content"][0]["text"]
 
 
-def call_ollama(messages: list[dict], system: str) -> str:
-    """Call a local Ollama model and return the response text."""
-    import requests
-    import time
+def call_ollama(messages: list[dict], system: str, streaming_callback=None) -> str:
+    """Call a local Ollama model and return the response text.
 
+    Args:
+        messages: List of message dicts with role and content
+        system: System prompt string
+        streaming_callback: Optional callback(token: str) called for each token
+
+    Returns:
+        The complete response text
+    """
     # Ollama uses OpenAI-style messages with system as first message
     ollama_messages = [{"role": "system", "content": system}] + messages
 
     request_body = {
         "model": OLLAMA_MODEL,
         "messages": ollama_messages,
-        "stream": False,
+        "stream": True,  # Enable streaming
         "options": {
             "temperature": 1.0,
             "top_p": 0.8,
@@ -290,30 +298,76 @@ def call_ollama(messages: list[dict], system: str) -> str:
     logger.debug(f"REQUEST | model={OLLAMA_MODEL} | messages={len(messages)} | last_user={user_msgs[-1]['content'][:200] if user_msgs else 'none'}...")
 
     start = time.perf_counter()
-    response = requests.post(
-        f"{OLLAMA_BASE_URL}/api/chat",
-        json=request_body,
-        timeout=180,
-    )
-    response.raise_for_status()
+
+    try:
+        response = requests.post(
+            f"{OLLAMA_BASE_URL}/api/chat",
+            json=request_body,
+            timeout=180,
+            stream=True,  # Enable streaming in requests
+        )
+        response.raise_for_status()
+
+        # Accumulate the full response from streaming chunks
+        full_response = ""
+
+        try:
+            for line in response.iter_lines():
+                if not line:
+                    continue
+
+                # Parse the JSON chunk
+                chunk = json.loads(line)
+
+                # Extract the token from the chunk
+                token = chunk.get("message", {}).get("content", "")
+
+                # Only process non-empty tokens
+                if token:
+                    # Call the callback if provided
+                    if streaming_callback is not None:
+                        streaming_callback(token)
+
+                    # Accumulate the token
+                    full_response += token
+
+                # Check if streaming is done
+                if chunk.get("done", False):
+                    break
+
+        except KeyboardInterrupt:
+            # Clean up the connection on interrupt
+            response.close()
+            raise
+
+    except requests.exceptions.RequestException:
+        # Let request exceptions propagate
+        raise
+
     elapsed = time.perf_counter() - start
 
-    result = response.json()
-    content = result["message"]["content"]
+    # Log response with timing
+    logger.debug(f"RESPONSE | {elapsed:.2f}s | content={full_response!r}")
 
-    # Log response with timing and token info
-    tokens = result.get("eval_count", "?")
-    logger.debug(f"RESPONSE | {elapsed:.2f}s | tokens={tokens} | content={content!r}")
-
-    return content
+    return full_response
 
 
-def call_llm(messages: list[dict], system: str) -> str:
-    """Call the configured LLM backend."""
+def call_llm(messages: list[dict], system: str, streaming_callback=None) -> str:
+    """Call the configured LLM backend.
+
+    Args:
+        messages: List of message dicts
+        system: System prompt
+        streaming_callback: Optional callback for streaming (Ollama only)
+
+    Returns:
+        The complete response text
+    """
     if BACKEND == "bedrock":
+        # Bedrock doesn't support streaming callback
         return call_bedrock(messages, system)
     elif BACKEND == "ollama":
-        return call_ollama(messages, system)
+        return call_ollama(messages, system, streaming_callback=streaming_callback)
     else:
         raise ValueError(f"Unknown backend: {BACKEND}")
 
@@ -380,6 +434,7 @@ def run_agent(
     on_progress: Optional[ProgressCallback] = None,
     debug: bool = False,
     conversation_history: Optional[list[dict]] = None,
+    streaming_callback=None,
 ) -> str:
     """
     Run the agent loop to answer a user query.
@@ -389,6 +444,7 @@ def run_agent(
         on_progress: Callback for progress updates (event, tool, detail)
         debug: If True, print raw model responses
         conversation_history: Optional list of previous Q&A pairs for context
+        streaming_callback: Optional callback for token-by-token streaming (Ollama only)
 
     Returns:
         The final answer string
@@ -422,7 +478,7 @@ def run_agent(
 
         for attempt in range(MAX_RETRIES):
             emit("thinking", "", f"Turn {turn + 1}")
-            response_text = call_llm(messages, system)
+            response_text = call_llm(messages, system, streaming_callback=streaming_callback)
 
             if debug:
                 print(f"[DEBUG] Turn {turn+1}, Attempt {attempt+1}:")

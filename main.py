@@ -78,11 +78,20 @@ class ProgressDisplay:
     def __init__(self):
         self.steps: list[tuple[str, str, str]] = []
         self.current_spinner: Optional[str] = None
+        self.streaming_text: str = ""
 
     def add_step(self, event: str, tool: str, detail: str):
         """Add a progress step."""
         self.steps.append((event, tool, detail))
         self.current_spinner = event
+
+    def update_streaming_text(self, text: str):
+        """Update the streaming text buffer."""
+        self.streaming_text = text
+
+    def clear_streaming_text(self):
+        """Clear the streaming text buffer."""
+        self.streaming_text = ""
 
     def render(self) -> Group:
         """Render the current progress state."""
@@ -164,7 +173,47 @@ class ProgressDisplay:
                 line.append(detail, style="dim")
                 elements.append(line)
 
+        # Show streaming text if any (truncate to last 20 lines for display)
+        if self.streaming_text:
+            # Limit visible lines to avoid terminal thrashing
+            lines = self.streaming_text.split("\n")
+            if len(lines) > 20:
+                visible_lines = lines[-20:]
+                streaming_display = "\n".join(visible_lines)
+            else:
+                streaming_display = self.streaming_text
+
+            stream_panel = Panel(
+                Text(streaming_display, style="dim cyan"),
+                title="[dim]Streaming...[/dim]",
+                border_style="dim",
+                padding=(0, 1),
+            )
+            elements.append(stream_panel)
+
         return Group(*elements)
+
+
+def make_streaming_callback(live, progress_display):
+    """Create a streaming callback that updates the live display.
+
+    Args:
+        live: Rich Live instance to update
+        progress_display: ProgressDisplay instance to store streaming text
+
+    Returns:
+        A callback function that accepts tokens
+    """
+    accumulated_text = ""
+
+    def callback(token: str):
+        nonlocal accumulated_text
+        if token:  # Only append non-empty tokens
+            accumulated_text += token
+            progress_display.update_streaming_text(accumulated_text)
+            live.update(progress_display.render())
+
+    return callback
 
 
 def show_welcome():
@@ -272,7 +321,24 @@ def process_query(query: str, conversation_history: list[dict]) -> str:
             console=console,
             refresh_per_second=10,
         ) as live:
-            answer = run_agent(query, on_progress=on_progress, conversation_history=conversation_history)
+            # Create streaming callback for Ollama
+            from agent import BACKEND
+            if BACKEND == "ollama":
+                streaming_callback = make_streaming_callback(live, progress)
+            else:
+                streaming_callback = None
+
+            answer = run_agent(
+                query,
+                on_progress=on_progress,
+                conversation_history=conversation_history,
+                streaming_callback=streaming_callback
+            )
+
+            # Clear streaming text after completion
+            progress.clear_streaming_text()
+            live.update(progress.render())
+
     except Exception as e:
         answer = f"Sorry, I encountered an error: {e}"
 
