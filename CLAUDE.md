@@ -33,6 +33,12 @@ python agent.py
 # Run benchmark suite
 python benchmark.py
 
+# Run benchmark without using cache (for official testing)
+python benchmark.py --no-cache
+
+# Clear the cache manually
+python benchmark.py --clear-cache
+
 # Run single benchmark case
 python benchmark.py count_games
 ```
@@ -78,6 +84,7 @@ Three tools available to the agent (defined in `schema.py:VALID_ACTIONS`):
 - `whatif.py` - Scenario analysis engine for business projections
 - `search.py` - Semantic search using ChromaDB (not currently enabled in agent)
 - `benchmark.py` - LLM evaluation suite with 13 test cases across 7 categories
+- `cache.py` - SQLite-based cache for LLM responses and SQL query results
 
 ### Database Schema
 
@@ -90,9 +97,22 @@ Configurable at the top of `agent.py`. Change `BACKEND` to switch providers:
 - **`ollama`** (default): Local Ollama instance. Default model: `ministral-3:8b` (97.6% benchmark score, ~92s/query).
 - **`bedrock`**: AWS Bedrock with Claude 3 Haiku. Requires AWS credentials.
 
+### Caching
+
+The system automatically caches LLM responses and SQL query results in `cache.db` (SQLite) to improve performance:
+
+- **LLM Response Cache**: Keyed by `(question, conversation_history)` hash. When the same question with the same context is asked again, the cached answer is returned immediately without calling the LLM.
+- **SQL Result Cache**: Keyed by SQL query hash. Identical SQL queries return cached results without hitting the database.
+- **TTL**: Cache entries expire after 7 days (`CACHE_TTL_SECONDS = 86400 * 7`)
+- **Management**: Use `python benchmark.py --clear-cache` to manually clear the cache, or `--no-cache` to run benchmarks with fresh results
+
+The cache is transparent - users don't need to manage it, but it significantly speeds up repeated queries during development and testing.
+
 ### Benchmarking
 
 Run `python benchmark.py` to evaluate model performance. The benchmark suite tests 13 cases across 7 categories (simple queries, multi-step reasoning, calculations, comparisons, what-if scenarios, follow-ups, edge cases).
+
+**Important**: Use `python benchmark.py --no-cache` for official benchmark runs to ensure fresh LLM calls.
 
 Top performing local models (tested March 2026):
 | Model | Score | Avg Time |

@@ -12,6 +12,19 @@ from io import StringIO
 # Import the modules we'll be testing
 from agent import run_agent, call_ollama, call_llm
 from main import ProgressDisplay
+from cache import clear_cache
+
+
+# =============================================================================
+# Fixtures
+# =============================================================================
+
+@pytest.fixture(autouse=True)
+def clear_test_cache():
+    """Clear cache before each test to prevent test pollution."""
+    clear_cache()
+    yield
+    clear_cache()
 
 
 # =============================================================================

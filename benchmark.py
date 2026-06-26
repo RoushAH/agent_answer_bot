@@ -2,12 +2,14 @@
 
 import json
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from agent import run_agent, OLLAMA_MODEL, BACKEND, BEDROCK_MODEL_ID
 from database import init_db
+from cache import clear_cache
 
 
 @dataclass
@@ -485,11 +487,25 @@ def get_score(cases: Optional[list[BenchmarkCase]] = None) -> float:
 
 
 if __name__ == "__main__":
-    import sys
+    # Parse command-line arguments for cache control
+    args = sys.argv[1:]
+
+    # Handle --clear-cache flag
+    if "--clear-cache" in args:
+        print("Clearing cache...")
+        clear_cache()
+        print("Cache cleared.")
+        sys.exit(0)
+
+    # Handle --no-cache flag
+    if "--no-cache" in args:
+        print("Clearing cache for fresh benchmark run...")
+        clear_cache()
+        args.remove("--no-cache")
 
     # Allow running a specific case by name
-    if len(sys.argv) > 1:
-        case_name = sys.argv[1]
+    if len(args) > 0:
+        case_name = args[0]
         matching = [c for c in BENCHMARK_CASES if c.name == case_name]
         if matching:
             print(f"Running single case: {case_name}")
