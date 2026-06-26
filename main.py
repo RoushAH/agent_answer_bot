@@ -78,11 +78,20 @@ class ProgressDisplay:
     def __init__(self):
         self.steps: list[tuple[str, str, str]] = []
         self.current_spinner: Optional[str] = None
+        self.streaming_text: str = ""
 
     def add_step(self, event: str, tool: str, detail: str):
         """Add a progress step."""
         self.steps.append((event, tool, detail))
         self.current_spinner = event
+
+    def set_streaming_text(self, text: str):
+        """Set the accumulated streaming text."""
+        self.streaming_text = text
+
+    def clear_streaming_text(self):
+        """Clear the streaming text buffer."""
+        self.streaming_text = ""
 
     def render(self) -> Group:
         """Render the current progress state."""
@@ -164,7 +173,49 @@ class ProgressDisplay:
                 line.append(detail, style="dim")
                 elements.append(line)
 
+        # Add streaming text if present (limit to last 20 lines for display)
+        if self.streaming_text:
+            lines = self.streaming_text.split('\n')
+            # Take last 20 lines to avoid terminal thrashing
+            display_lines = lines[-20:] if len(lines) > 20 else lines
+            streaming_display = '\n'.join(display_lines)
+
+            stream_text = Text()
+            stream_text.append("\n  ", style="dim")
+            stream_text.append("Response: ", style="bold dim")
+            stream_text.append(streaming_display, style="dim italic")
+            elements.append(stream_text)
+
         return Group(*elements)
+
+
+def make_streaming_callback(live: Live, display: ProgressDisplay):
+    """Create a streaming callback that updates the live display.
+
+    Args:
+        live: Rich Live context manager
+        display: ProgressDisplay instance to update
+
+    Returns:
+        A callback function that receives tokens and updates the display
+    """
+    accumulated_text = ""
+
+    def callback(token: str):
+        nonlocal accumulated_text
+        accumulated_text += token
+        display.set_streaming_text(accumulated_text)
+        live.update(display.render())
+
+    # Store reference to accumulated text so it can be cleared later
+    callback.get_text = lambda: accumulated_text
+    callback.clear = lambda: nonlocal_clear()
+
+    def nonlocal_clear():
+        nonlocal accumulated_text
+        accumulated_text = ""
+
+    return callback
 
 
 def show_welcome():
@@ -272,7 +323,21 @@ def process_query(query: str, conversation_history: list[dict]) -> str:
             console=console,
             refresh_per_second=10,
         ) as live:
-            answer = run_agent(query, on_progress=on_progress, conversation_history=conversation_history)
+            # Create streaming callback for live token display
+            streaming_callback = make_streaming_callback(live, progress)
+
+            answer = run_agent(
+                query,
+                on_progress=on_progress,
+                conversation_history=conversation_history,
+                streaming_callback=streaming_callback
+            )
+
+            # Clear streaming text after agent completes
+            progress.clear_streaming_text()
+    except KeyboardInterrupt:
+        # Clean propagation of keyboard interrupt
+        raise
     except Exception as e:
         answer = f"Sorry, I encountered an error: {e}"
 
