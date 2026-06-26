@@ -398,12 +398,16 @@ def run_agent(
         if on_progress:
             on_progress(event, tool, detail)
 
-    # Check cache first
-    cache_key = make_cache_key(user_query, conversation_history)
-    cached_answer = get_llm_response(cache_key)
-    if cached_answer is not None:
-        emit("cache_hit", "", "Using cached response")
-        return cached_answer
+    # Check cache first (with error handling - cache failures should not prevent agent from running)
+    try:
+        cache_key = make_cache_key(user_query, conversation_history)
+        cached_answer = get_llm_response(cache_key)
+        if cached_answer is not None:
+            emit("cache_hit", "", "Using cached response")
+            return cached_answer
+    except Exception:
+        # If cache check fails, continue to run agent normally
+        pass
 
     # Check if this question needs planning
     needs_plan = requires_plan(user_query)
@@ -498,8 +502,12 @@ def run_agent(
                 continue
             emit("answer", "", "")
             final_answer = action["text"]
-            # Cache the final answer
-            set_llm_response(cache_key, user_query, final_answer)
+            # Cache the final answer (with error handling - cache failures should not prevent returning the answer)
+            try:
+                set_llm_response(cache_key, user_query, final_answer)
+            except Exception:
+                # If caching fails, still return the answer
+                pass
             return final_answer
 
         # Track tool turns (plan doesn't count)
