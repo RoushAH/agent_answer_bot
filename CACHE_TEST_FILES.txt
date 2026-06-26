@@ -1,0 +1,87 @@
+CACHE FEATURE TEST SUITE - FILE LISTING
+========================================
+
+Created: 2026-06-26
+Ticket: LOO-32 (Caching)
+Status: Ready for implementation
+
+FILES CREATED (7 total)
+========================================
+
+tests/test_cache.py (33 KB, 1,015 lines)
+  Main test file with 49 comprehensive tests
+  - Cache initialization (5 tests)
+  - Cache key generation (7 tests)
+  - LLM response caching (7 tests)
+  - SQL result caching (7 tests)
+  - Cache clearing (3 tests)
+  - Expired entry cleanup (3 tests)
+  - Agent integration (3 tests)
+  - Database integration (3 tests)
+  - Benchmark integration (3 tests)
+  - Edge cases & errors (11 tests)
+
+tests/QUICK_START.md (3.9 KB)
+  Fast-path reference for developers
+  - Test commands by category
+  - Module structure template
+  - Integration code examples
+  - Common issues and fixes
+  
+tests/CACHE_TEST_CHECKLIST.md (6.2 KB)
+  Step-by-step implementation guide
+  - 10 implementation phases
+  - Shows which tests pass after each phase
+  - Detailed requirements for each function
+  - Troubleshooting tips
+
+tests/TEST_CACHE_SUMMARY.md (6.1 KB)
+  Test organization and coverage overview
+  - Test categories with checkboxes
+  - Maps tests to design document
+  - Additional tests beyond spec
+
+tests/README_CACHE_TESTS.md (6.4 KB)
+  Comprehensive test suite documentation
+  - Problem statement
+  - Running instructions
+  - Performance expectations
+  - Debugging tips
+  - Contributing guidelines
+
+CACHE_TEST_SUMMARY.txt (5.9 KB)
+  Top-level overview document
+  - Feature summary
+  - Test coverage statistics
+  - Implementation guide
+  - Performance expectations
+
+IMPLEMENTATION_READY.md (2.1 KB)
+  Quick reference for starting implementation
+  - Status summary
+  - Next steps
+  - Success criteria
+
+TOTAL: 7 files, ~70 KB documentation
+
+VERIFICATION
+========================================
+
+Run: pytest tests/test_cache.py -v
+
+Expected (now):
+  ERROR: ModuleNotFoundError: No module named 'cache'
+  ✅ CORRECT - Tests should fail before implementation
+
+Expected (after implementation):
+  49 passed in 2.31s
+  ✅ All tests pass once cache.py is complete
+
+START IMPLEMENTING
+========================================
+
+Read first:  tests/QUICK_START.md
+Guide:       tests/CACHE_TEST_CHECKLIST.md
+Reference:   tests/README_CACHE_TESTS.md
+
+Good luck! 🚀

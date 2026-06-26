@@ -9,6 +9,7 @@ from typing import Callable, Optional
 from database import query_db, get_schema
 from calculator import calculate
 from schema import validate_action
+from cache import make_cache_key, get_llm_response, set_llm_response
 
 # =============================================================================
 # LOGGING CONFIGURATION
@@ -397,6 +398,13 @@ def run_agent(
         if on_progress:
             on_progress(event, tool, detail)
 
+    # Check cache first
+    cache_key = make_cache_key(user_query, conversation_history)
+    cached_answer = get_llm_response(cache_key)
+    if cached_answer is not None:
+        emit("cache_hit", "", "Using cached response")
+        return cached_answer
+
     # Check if this question needs planning
     needs_plan = requires_plan(user_query)
     system = get_system_prompt(needs_plan=needs_plan)
@@ -489,7 +497,10 @@ def run_agent(
                 })
                 continue
             emit("answer", "", "")
-            return action["text"]
+            final_answer = action["text"]
+            # Cache the final answer
+            set_llm_response(cache_key, user_query, final_answer)
+            return final_answer
 
         # Track tool turns (plan doesn't count)
         turns_used += 1

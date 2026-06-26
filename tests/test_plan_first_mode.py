@@ -265,16 +265,18 @@ def test_agent_ask_does_not_inject_planning_instruction_when_requires_plan_is_fa
     """Test that no planning overhead is added for simple questions."""
     with patch('agent.call_llm') as mock_llm, \
          patch('agent.requires_plan', return_value=False), \
-         patch('agent.query_db') as mock_db:
-        
+         patch('agent.query_db') as mock_db, \
+         patch('agent.get_llm_response', return_value=None), \
+         patch('agent.set_llm_response'):
+
         mock_llm.side_effect = [
             json.dumps({"action": "query", "sql": "SELECT COUNT(*) FROM board_games"}),
             json.dumps({"action": "answer", "text": "10 games"})
         ]
         mock_db.return_value = [{"count": 10}]
-        
+
         result = run_agent("How many games?")
-        
+
         assert result == "10 games"
 
 
@@ -379,8 +381,10 @@ def test_tui_plan_panel_contains_plan_text():
 def test_full_integration_comparison_question_produces_correct_answer_via_plan():
     """Full end-to-end test: comparison question uses plan and produces correct answer."""
     with patch('agent.query_db') as mock_db, \
-         patch('agent.call_llm') as mock_llm:
-        
+         patch('agent.call_llm') as mock_llm, \
+         patch('agent.get_llm_response', return_value=None), \
+         patch('agent.set_llm_response'):
+
         # Mock the LLM to produce: plan -> query A -> query B -> answer
         mock_llm.side_effect = [
             json.dumps({
@@ -400,21 +404,21 @@ def test_full_integration_comparison_question_produces_correct_answer_via_plan()
                 "text": "Catan sold more units with 50 units compared to Pandemic's 30 units."
             })
         ]
-        
+
         # Mock DB responses
         mock_db.side_effect = [
             [{"units": 50}],
             [{"units": 30}]
         ]
-        
+
         result = run_agent("Which sells more units, Catan or Pandemic?")
-        
+
         # Verify the answer mentions both games
         assert "Catan" in result
         assert "Pandemic" in result
         assert "50" in result
         assert "30" in result
-        
+
         # Verify that we had at least 2 queries
         assert mock_db.call_count >= 2
 
@@ -465,8 +469,10 @@ def test_simple_question_does_not_trigger_planning():
     """Test that simple questions don't unnecessarily use planning."""
     with patch('agent.query_db') as mock_db, \
          patch('agent.call_llm') as mock_llm, \
-         patch('agent.requires_plan', return_value=False):
-        
+         patch('agent.requires_plan', return_value=False), \
+         patch('agent.get_llm_response', return_value=None), \
+         patch('agent.set_llm_response'):
+
         mock_llm.side_effect = [
             json.dumps({
                 "action": "query",
@@ -477,11 +483,11 @@ def test_simple_question_does_not_trigger_planning():
                 "text": "We have 50 board games in stock."
             })
         ]
-        
+
         mock_db.return_value = [{"count": 50}]
-        
+
         result = run_agent("How many board games do we have?")
-        
+
         # Should complete in 2 LLM calls (query + answer), no plan
         assert mock_llm.call_count == 2
         assert "50" in result
@@ -507,24 +513,26 @@ def test_plan_with_invalid_format_is_rejected():
 def test_agent_handles_plan_followed_by_error_gracefully():
     """Test that if a tool fails after planning, agent can recover."""
     with patch('agent.query_db') as mock_db, \
-         patch('agent.call_llm') as mock_llm:
-        
+         patch('agent.call_llm') as mock_llm, \
+         patch('agent.get_llm_response', return_value=None), \
+         patch('agent.set_llm_response'):
+
         mock_llm.side_effect = [
             json.dumps({"action": "plan", "steps": "1. Query data"}),
             json.dumps({"action": "query", "sql": "INVALID SQL"}),
             json.dumps({"action": "query", "sql": "SELECT COUNT(*) FROM board_games"}),
             json.dumps({"action": "answer", "text": "Found the answer"})
         ]
-        
+
         def db_side_effect(sql):
             if "INVALID" in sql:
                 raise Exception("SQL error")
             return [{"count": 10}]
-        
+
         mock_db.side_effect = db_side_effect
-        
+
         result = run_agent("Test question")
-        
+
         # Should eventually succeed despite the error
         assert "answer" in result.lower() or "Found" in result
 

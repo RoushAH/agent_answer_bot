@@ -2,12 +2,20 @@
 
 import json
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from agent import run_agent, OLLAMA_MODEL, BACKEND, BEDROCK_MODEL_ID
+import agent
 from database import init_db
+from cache import clear_cache
+
+# Re-export for convenience
+run_agent = agent.run_agent
+OLLAMA_MODEL = agent.OLLAMA_MODEL
+BACKEND = agent.BACKEND
+BEDROCK_MODEL_ID = agent.BEDROCK_MODEL_ID
 
 
 @dataclass
@@ -36,7 +44,7 @@ class BenchmarkCase:
         """Execute this benchmark case and return the result."""
         start = time.perf_counter()
         try:
-            answer = run_agent(
+            answer = agent.run_agent(
                 self.question,
                 conversation_history=self.conversation_history,
             )
@@ -485,10 +493,21 @@ def get_score(cases: Optional[list[BenchmarkCase]] = None) -> float:
 
 
 if __name__ == "__main__":
-    import sys
+    # Handle cache control flags
+    if "--clear-cache" in sys.argv:
+        print("Clearing cache...")
+        clear_cache()
+        print("Cache cleared.")
+        sys.exit(0)
+
+    if "--no-cache" in sys.argv:
+        print("Clearing cache before benchmark run...")
+        clear_cache()
+        # Remove the flag from argv so it doesn't interfere with case name parsing
+        sys.argv.remove("--no-cache")
 
     # Allow running a specific case by name
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 1 and not sys.argv[1].startswith("--"):
         case_name = sys.argv[1]
         matching = [c for c in BENCHMARK_CASES if c.name == case_name]
         if matching:
