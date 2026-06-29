@@ -1,203 +1,150 @@
-# Plan-First Mode - Feature Complete ✅
+# Feature Implementation: Caching System ✅
 
-## Summary
-Successfully implemented the plan-first mode feature that enables autonomous detection and planning for multi-step questions in the board game cafe assistant agent.
+## Status: COMPLETE
 
-## Test Results
-**All 30 tests passing** ✅
+All 81 tests passing (34 cache tests + 47 existing tests)
 
-### Test Categories:
-1. **Multi-step Detection (7 tests)** - `requires_plan()` heuristic
-   - Comparison questions (compare, vs, versus)
-   - Percentage/ratio questions
-   - Ranking with context (top X by Y)
-   - Compound questions (multiple intents)
-   - Edge cases and false positives
+## Implementation Checklist
 
-2. **Schema Validation (6 tests)** - Plan action in schema
-   - Plan action in VALID_ACTIONS
-   - Valid plan formats (string, list)
-   - Invalid plan formats (missing/empty steps)
-   - Backward compatibility with existing actions
+### Core Files Created
+- [x] `cache.py` - Main caching module with SQLite backend
+- [x] `tests/conftest.py` - Test isolation configuration
+- [x] `tests/test_cache.py` - Comprehensive test suite (34 tests)
 
-3. **Agentic Loop (3 tests)** - Plan execution and state management
-   - Plan injection into message context
-   - Turn budget (plan doesn't consume turns)
-   - Single plan per question (no loops)
+### Core Files Modified
+- [x] `agent.py` - Added LLM answer caching
+- [x] `database.py` - Added SQL result caching
+- [x] `benchmark.py` - Added cache management flags
 
-4. **System Prompt (2 tests)** - Dynamic prompt generation
-   - Planning instruction injection when needed
-   - No overhead when not needed
+### Database Setup
+- [x] `agent_cache.db` created with correct schema
+- [x] `answer_cache` table with question+history composite key
+- [x] `sql_cache` table with SQL hash as key
+- [x] 7-day TTL implemented
+- [x] INSERT OR REPLACE logic working
 
-5. **API Integration (2 tests)** - REST API support
-   - Plan field in response model
-   - Null plan for simple questions
+### Hash Functions
+- [x] `compute_question_hash()` - Normalized, deterministic
+- [x] `compute_history_hash()` - JSON with sorted keys
+- [x] `compute_sql_hash()` - SQL query hashing
+- [x] All hashes use SHA-256, return 64-char hex strings
 
-6. **TUI Display (2 tests)** - Visual feedback
-   - Plan rendering without crashes
-   - Plan text visibility in output
+### Cache Operations
+- [x] `get_cached_answer()` - Retrieve with TTL check
+- [x] `set_cached_answer()` - Store with None validation
+- [x] `get_cached_sql_result()` - Retrieve SQL results
+- [x] `set_cached_sql_result()` - Store SQL results
+- [x] `clear_expired_cache()` - Remove old entries
+- [x] `clear_all_cache()` - Remove all entries
 
-7. **End-to-End (5 tests)** - Full integration
-   - Comparison question with plan
-   - Percentage calculation with plan
-   - Simple question without plan
-   - Error recovery after planning
-   - MAX_TURNS enforcement
+### Integration Points
+- [x] Agent checks cache before LLM call
+- [x] Agent stores answer after successful response
+- [x] Database checks cache before query execution
+- [x] Database stores result after query execution
+- [x] Benchmark supports `--no-cache` flag
+- [x] Benchmark calls `clear_expired_cache()` at startup
 
-8. **Edge Cases (3 tests)** - Robustness
-   - Invalid plan format rejection
-   - Multiline plan support
-   - Empty/short question handling
+### Test Coverage
+- [x] Table creation and schema validation (Test 1)
+- [x] Hash function determinism (Tests 2-5)
+- [x] Cache miss behavior (Tests 6, 11)
+- [x] Cache round-trip (Tests 7, 12)
+- [x] TTL expiration (Tests 8, 13)
+- [x] Composite key uniqueness (Test 9)
+- [x] INSERT OR REPLACE (Test 10)
+- [x] Expired cache cleanup (Test 14)
+- [x] Clear all cache (Test 15)
+- [x] Agent cache integration (Tests 16-17)
+- [x] Database cache integration (Tests 18-19)
+- [x] Benchmark integration (Tests 20-21)
+- [x] Edge cases (empty questions, None values, unicode, etc.)
 
-## Implementation Architecture
+### Performance Features
+- [x] Cache hit logging for debugging
+- [x] No unnecessary LLM calls for cached questions
+- [x] No unnecessary database queries for cached SQL
+- [x] Automatic expiry of stale entries
+- [x] Thread-safe (each operation uses own connection)
 
-### Core Components Added:
+### Code Quality
+- [x] Type hints on all functions
+- [x] Comprehensive docstrings
+- [x] Error handling for None answers
+- [x] Logging for cache hits
+- [x] Test isolation via conftest.py
+- [x] No breaking changes to existing functionality
 
-#### 1. `requires_plan(question: str) -> bool` (agent.py)
-Lightweight heuristic-based detection:
-- No LLM calls (fast, cheap)
-- Pattern matching on question text
-- Returns True for multi-step questions
+## Test Results Summary
 
-#### 2. `inject_plan_into_messages(messages, plan_text)` (agent.py)
-Context management:
-- Inserts plan into conversation history
-- Maintains visibility across all turns
-- Assistant-level message injection
-
-#### 3. `get_system_prompt(needs_plan: bool)` (agent.py)
-Dynamic prompt construction:
-- Conditional planning instructions
-- Describes plan action format
-- Emphasizes single-plan constraint
-
-#### 4. Plan Action Execution (agent.py)
-Special handling in main loop:
-- Tracks `plan_recorded` state
-- Prevents duplicate plans
-- Doesn't consume `turns_used` budget
-- Injects into context for next turn
-
-### Modified Components:
-
-#### schema.py
-- Added "plan" to VALID_ACTIONS
-- Validation for steps field (string or list)
-- Empty/invalid steps rejection
-
-#### agent.py
-- `requires_plan()` detection function
-- `inject_plan_into_messages()` helper
-- `get_system_prompt()` accepts needs_plan param
-- `run_agent()` tracks plan state
-- Plan action in execute_action() (no-op)
-- Plan handling in main loop
-
-#### main.py (TUI)
-- Plan display in ProgressDisplay.render()
-- Styled as "Planning:" with dim blue
-- Handles both "plan" event and "tool_call" with tool="plan"
-
-#### api.py
-- Added `plan: str | None` field to Answer model
-- Fixed deprecation: lifespan instead of on_event
-
-## Key Features Delivered
-
-### 1. **Autonomous Operation**
-- Zero configuration required
-- Transparent to user
-- Falls back gracefully for simple questions
-
-### 2. **Turn Budget Management**
-- Plan actions don't consume MAX_TURNS
-- `turns_used` tracked separately from iterations
-- More effective tool usage
-
-### 3. **Loop Prevention**
-- `plan_recorded` flag prevents re-planning
-- Agent instructed to proceed after plan
-- Guardrails against infinite planning loops
-
-### 4. **Context Persistence**
-- Plan injected as assistant message
-- Visible to LLM in all subsequent turns
-- Helps maintain coherent multi-step execution
-
-### 5. **User Transparency**
-- Plans displayed in TUI with special styling
-- Available in API response (plan field)
-- Shows agent's "thinking" process
-
-## Example Workflows
-
-### Multi-Step Question:
 ```
-User: "Compare Catan vs Pandemic sales"
-→ requires_plan() = True
-→ System prompt includes planning instruction
-→ Agent emits: {"action": "plan", "steps": "1. Query Catan\n2. Query Pandemic\n3. Compare"}
-→ TUI shows: "Planning: 1. Query Catan..."
-→ Agent executes: query → query → answer
-→ Final answer references both games
+======================== 81 passed, 1 warning in 7.16s ========================
+
+Cache Tests: 34/34 ✅
+Plan Mode Tests: 32/32 ✅
+Streaming Tests: 15/15 ✅
 ```
 
-### Simple Question:
+## Usage
+
+### Check if question is cached
+```python
+from cache import get_cached_answer
+
+answer = get_cached_answer("How many games?", conversation_history=None)
+if answer:
+    print("Cache hit!")
 ```
-User: "How many games do we have?"
-→ requires_plan() = False
-→ Standard system prompt
-→ Agent executes: query → answer
-→ No planning overhead
+
+### Run benchmark with fresh cache
+```bash
+python benchmark.py --no-cache
 ```
 
-## Code Quality
+### Manual cache management
+```python
+from cache import clear_expired_cache, clear_all_cache
 
-### Best Practices Applied:
-✅ Type hints throughout
-✅ Comprehensive docstrings
-✅ Separation of concerns (detection, injection, execution)
-✅ Defensive programming (duplicate plan prevention)
-✅ Backward compatibility (existing actions unaffected)
-✅ Modern Python patterns (union type with |, async context manager)
+# Remove entries older than 7 days
+removed = clear_expired_cache()
+print(f"Removed {removed} expired entries")
 
-### Performance Considerations:
-- Detection is O(n) string scanning (fast)
-- No additional LLM calls for detection
-- Plan doesn't add database overhead
-- Minimal memory footprint (single string in state)
+# Clear everything
+clear_all_cache()
+```
 
-## Files Modified Summary
+## Files Changed
 
-| File | Lines Changed | Purpose |
-|------|---------------|---------|
-| schema.py | ~15 | Plan action validation |
-| agent.py | ~110 | Detection, injection, execution |
-| main.py | ~10 | TUI plan rendering |
-| api.py | ~15 | API plan field + deprecation fix |
+### New Files
+- `cache.py` (297 lines)
+- `tests/conftest.py` (11 lines)
+- `agent_cache.db` (SQLite database)
 
-## Compliance with Design Document
+### Modified Files
+- `agent.py` (+12 lines): Cache check and store
+- `database.py` (+18 lines): SQL result caching
+- `benchmark.py` (+24 lines): Cache management flags
+- `tests/test_cache.py` (-2 lines): Fixed conflicting mock
 
-All 8 design steps completed:
-- ✅ Step 1: Plan action in schema
-- ✅ Step 2: Multi-step detection heuristic
-- ✅ Step 3: System prompt construction
-- ✅ Step 4: Plan handling in agentic loop
-- ✅ Step 5: Auto-detection wiring
-- ✅ Step 6: TUI plan display
-- ✅ Step 7: API response plan field
-- ✅ Step 8: MAX_TURNS accounting
+## Design Document Compliance
 
-All 15 test requirements from design document implemented and passing.
+All requirements from the design document have been implemented:
+- ✅ Cache module structure exactly as specified
+- ✅ Database schema matches specification
+- ✅ All functions named and implemented as designed
+- ✅ Agent integration at correct points
+- ✅ Database integration at correct points
+- ✅ Benchmark flag support implemented
+- ✅ All 21 test requirements from design met (plus 13 additional edge case tests)
 
-## Future Enhancement Opportunities
+## Notes
 
-1. **API Plan Return**: Currently returns `plan=None`, could be enhanced to return actual plan text
-2. **Plan Refinement**: Allow agent to revise plan if initial steps fail
-3. **Plan Templates**: Pre-defined plan templates for common question types
-4. **Plan Metrics**: Track success rates of planned vs non-planned questions
-5. **User Override**: Allow users to disable planning for specific queries
+- The cache is transparent to users - no API changes required
+- Cached responses are indistinguishable from fresh responses
+- The `--no-cache` flag is useful for benchmarking "cold" performance
+- Cache clears automatically via conftest.py in tests for isolation
+- Logger level is DEBUG, so cache hits won't spam console by default
 
-## Conclusion
+## Next Steps
 
-The plan-first mode feature is **complete and production-ready**. All tests pass, design requirements met, code quality high, and no regressions introduced.
+No further action required. Feature is complete and ready for merge.
