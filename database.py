@@ -1,9 +1,15 @@
 """SQLite database for board game cafe data."""
 
+import json
+import logging
 import sqlite3
 from pathlib import Path
 
+from cache import get_cached_sql_result, set_cached_sql_result
+
 DB_PATH = Path(__file__).parent / "cafe.db"
+
+logger = logging.getLogger("database")
 
 
 def get_connection() -> sqlite3.Connection:
@@ -223,12 +229,24 @@ def init_db() -> None:
 
 def query_db(sql: str) -> list[dict]:
     """Execute a SELECT query and return results as list of dicts."""
+    # Check cache first
+    cached_result = get_cached_sql_result(sql)
+    if cached_result is not None:
+        logger.debug(f"SQL cache hit for query: {sql[:50]}...")
+        return json.loads(cached_result)
+
+    # Execute query if not cached
     conn = get_connection()
     cur = conn.cursor()
     try:
         cur.execute(sql)
         rows = cur.fetchall()
-        return [dict(row) for row in rows]
+        result = [dict(row) for row in rows]
+
+        # Cache the result
+        set_cached_sql_result(sql, json.dumps(result))
+
+        return result
     finally:
         conn.close()
 

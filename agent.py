@@ -11,6 +11,7 @@ from typing import Callable, Optional
 from database import query_db, get_schema
 from calculator import calculate
 from schema import validate_action
+from cache import get_cached_answer, set_cached_answer
 
 # =============================================================================
 # LOGGING CONFIGURATION
@@ -457,6 +458,12 @@ def run_agent(
         if on_progress:
             on_progress(event, tool, detail)
 
+    # Check cache first
+    cached_answer = get_cached_answer(user_query, conversation_history)
+    if cached_answer is not None:
+        logger.debug(f"Cache hit for question: {user_query[:50]}...")
+        return cached_answer
+
     # Check if this question needs planning
     needs_plan = requires_plan(user_query)
     system = get_system_prompt(needs_plan=needs_plan)
@@ -549,7 +556,10 @@ def run_agent(
                 })
                 continue
             emit("answer", "", "")
-            return action["text"]
+            answer_text = action["text"]
+            # Cache the answer before returning
+            set_cached_answer(user_query, conversation_history, answer_text)
+            return answer_text
 
         # Track tool turns (plan doesn't count)
         turns_used += 1

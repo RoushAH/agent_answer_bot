@@ -8,6 +8,7 @@ from typing import Callable, Optional
 
 from agent import run_agent, OLLAMA_MODEL, BACKEND, BEDROCK_MODEL_ID
 from database import init_db
+from cache import clear_all_cache, clear_expired_cache
 
 
 @dataclass
@@ -354,6 +355,7 @@ class BenchmarkSummary:
 def run_benchmark(
     cases: Optional[list[BenchmarkCase]] = None,
     verbose: bool = True,
+    no_cache: bool = False,
 ) -> BenchmarkSummary:
     """
     Run the full benchmark suite and return a summary.
@@ -361,12 +363,20 @@ def run_benchmark(
     Args:
         cases: List of cases to run (defaults to all BENCHMARK_CASES)
         verbose: Print progress as tests run
+        no_cache: If True, clear all cache before running
 
     Returns:
         BenchmarkSummary with overall score and detailed results
     """
     if cases is None:
         cases = BENCHMARK_CASES
+
+    # Clear cache if requested
+    if no_cache:
+        clear_all_cache()
+
+    # Always clear expired cache entries
+    clear_expired_cache()
 
     # Ensure DB is initialized
     init_db()
@@ -487,13 +497,17 @@ def get_score(cases: Optional[list[BenchmarkCase]] = None) -> float:
 if __name__ == "__main__":
     import sys
 
+    # Check for --no-cache flag
+    no_cache = "--no-cache" in sys.argv
+    args = [arg for arg in sys.argv[1:] if arg != "--no-cache"]
+
     # Allow running a specific case by name
-    if len(sys.argv) > 1:
-        case_name = sys.argv[1]
+    if len(args) > 0:
+        case_name = args[0]
         matching = [c for c in BENCHMARK_CASES if c.name == case_name]
         if matching:
             print(f"Running single case: {case_name}")
-            summary = run_benchmark(cases=matching)
+            summary = run_benchmark(cases=matching, no_cache=no_cache)
             # Show the answer for single case runs
             for r in summary.individual_results:
                 print(f"\nAnswer: {r.answer}")
@@ -505,7 +519,7 @@ if __name__ == "__main__":
             sys.exit(1)
     else:
         # Run full benchmark
-        summary = run_benchmark()
+        summary = run_benchmark(no_cache=no_cache)
 
         # Show ALL case details
         print("\nALL CASES DETAIL:")
